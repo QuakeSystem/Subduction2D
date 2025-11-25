@@ -47,7 +47,7 @@ function GMG_subduction_2D(nx, ny)
         Temp,
         Grid2D;
         xlim=(xmin, xmax),
-        zlim=(-12.5, air_thickness),
+        zlim=(0, air_thickness),
         Origin=nothing, StrikeAngle=0, DipAngle=0,
         phase=LithosphericPhases(Layers=[], Phases=[1], Tlab=Tlab), # √GeophysicalModelGenerator.jl/src/Setup_geometry.jl
         T=HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=50, Adiabat=0)

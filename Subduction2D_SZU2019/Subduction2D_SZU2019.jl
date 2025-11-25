@@ -1,12 +1,14 @@
-# Load script dependencies
+# BvA, November 2025
+# This script is based on JustRelax.jl/miniapps/subduction/2D.
+# Here, the model is bundled with the _setup and _rheology file and
+# is being tuned to the van Dinther (2019) paper on Mega Thrusts.
 
+
+# Load script dependencies
 using Pkg
 Pkg.activate(".")
-# Pkg.add("JustRelax")
 Pkg.instantiate()
 using JustRelax
-
-# Pkg.activate(".")
 
 using GeoParams, CairoMakie
 
@@ -369,7 +371,7 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Figures/remotetest"
+figdir = "Figures/"
 n = 32 # *4
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
