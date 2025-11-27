@@ -133,8 +133,8 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim=(854, 890, xmax, xmax),
-        zlim=(-19.5, -23, -23, -11.5),
+        xlim=(954, 854, 1007, 1030),
+        zlim=(-8, -12.5, -19.5, -8),
         phase=LithosphericPhases(Layers=[], Phases=[8], Tlab=Tlab), # √GeophysicalModelGenerator.jl/src/Setup_geometry.jl
         # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
@@ -144,8 +144,8 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim=(854, 890, xmax, xmax),
-        zlim=(-19.5, -23, -23, -11.5),
+        xlim=(854, 960, 970, 1007),
+        zlim=(-12.5, -38, -38, -19.5),
         phase=LithosphericPhases(Layers=[], Phases=[9], Tlab=Tlab), # √GeophysicalModelGenerator.jl/src/Setup_geometry.jl
         # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
