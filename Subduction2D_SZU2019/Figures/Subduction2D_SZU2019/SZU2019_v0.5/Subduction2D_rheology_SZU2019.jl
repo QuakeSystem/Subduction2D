@@ -3,45 +3,91 @@ using GeoParams.Diffusion
 using GeoParams.MaterialParameters
 searchsorted
 
-function init_rheology_nonNewtonian()
-    #dislocation laws
-    disl_wet_olivine = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
-    # diffusion laws
-    diff_wet_olivine = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
+# function init_rheology_nonNewtonian()
+#     #dislocation laws
+#     disl_wet_olivine = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
+#     # diffusion laws
+#     diff_wet_olivine = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
 
-    el = ConstantElasticity(; G=40.0e9)
+#     el = ConstantElasticity(; G=40.0e9)
 
-    lithosphere_rheology = CompositeRheology((el, disl_wet_olivine, diff_wet_olivine))
-    return init_rheologies(lithosphere_rheology)
-end
+#     lithosphere_rheology = CompositeRheology((el, disl_wet_olivine, diff_wet_olivine))
+#     return init_rheologies(lithosphere_rheology)
+# end
 
-function init_rheology_nonNewtonian_plastic()
-    #dislocation laws
-    disl_wet_olivine = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
-    # diffusion laws
-    diff_wet_olivine = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
-    # plasticity
-    ϕ_wet_olivine = asind(0.1)
-    C_wet_olivine = 1.0e6
-    η_reg = 1.0e16
-    el = ConstantElasticity(; G=40.0e9, ν=0.45)
-    lithosphere_rheology = CompositeRheology(
-        (
-        el,
-        disl_wet_olivine,
-        diff_wet_olivine,
-        DruckerPrager_regularised(; C=C_wet_olivine, ϕ=ϕ_wet_olivine, η_vp=η_reg, Ψ=0.0), # non-regularized plasticity
-    )
-    )
-    return init_rheologies(lithosphere_rheology)
-end
+# function init_rheology_nonNewtonian_plastic()
+#     #dislocation laws
+#     disl_wet_olivine = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
+#     # diffusion laws
+#     diff_wet_olivine = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
+#     # plasticity
+#     ϕ_wet_olivine = asind(0.1)
+#     C_wet_olivine = 1.0e6
+#     η_reg = 1.0e16
+#     el = ConstantElasticity(; G=40.0e9, ν=0.45)
+#     lithosphere_rheology = CompositeRheology(
+#         (
+#         el,
+#         disl_wet_olivine,
+#         diff_wet_olivine,
+#         DruckerPrager_regularised(; C=C_wet_olivine, ϕ=ϕ_wet_olivine, η_vp=η_reg, Ψ=0.0), # non-regularized plasticity
+#     )
+#     )
+#     return init_rheologies(lithosphere_rheology)
+# end
 
-function init_rheology_linear()
-    el = ConstantElasticity(; G=40.0e9, ν=0.45)
-    # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
-    lithosphere_rheology = CompositeRheology((LinearViscous(; η=1.0e23), el))
-    return init_rheologies(lithosphere_rheology)
-end
+# function init_rheology_linear()
+#     el = ConstantElasticity(; G=40.0e9, ν=0.45)
+#     # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
+#     lithosphere_rheology = CompositeRheology((LinearViscous(; η=1.0e23), el))
+#     return init_rheologies(lithosphere_rheology)
+# end
+
+
+# function init_rheologies()
+#     el = ConstantElasticity(; G=40.0e9, ν=0.45)
+#     # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
+#     lithosphere_rheology = CompositeRheology((LinearViscous(; η=1.0e23), el))
+#     # common physical properties
+#     α = 2.4e-5 # 1 / K
+#     Cp = 750    # J / kg K
+#     # Define rheolgy struct
+#     return rheology = (
+#         # Name = "Asthenoshpere",
+#         SetMaterialParams(;
+#             Phase=1,
+#             Density=ConstantDensity(; ρ=3.2e3),
+#             HeatCapacity=ConstantHeatCapacity(; Cp=Cp),
+#             Conductivity=ConstantConductivity(; k=2.5),
+#             CompositeRheology=CompositeRheology((LinearViscous(; η=1.0e20),)),
+#             Gravity=ConstantGravity(; g=9.81),
+#         ),
+#         # Name              = "Oceanic lithosphere",
+#         SetMaterialParams(;
+#             Phase=2,
+#             Density=PT_Density(; ρ0=3.2e3, α=α, β=0.0e0, T0=273 + 1474),
+#             HeatCapacity=ConstantHeatCapacity(; Cp=Cp),
+#             Conductivity=ConstantConductivity(; k=2.5),
+#             CompositeRheology=lithosphere_rheology,
+#         ),
+#         # Name              = "oceanic crust",
+#         SetMaterialParams(;
+#             Phase=3,
+#             Density=ConstantDensity(; ρ=3.2e3),
+#             HeatCapacity=ConstantHeatCapacity(; Cp=Cp),
+#             Conductivity=ConstantConductivity(; k=2.5),
+#             CompositeRheology=CompositeRheology((LinearViscous(; η=1.0e20),)),
+#         ),
+#         # Name              = "StickyAir",
+#         SetMaterialParams(;
+#             Phase=4,
+#             Density=ConstantDensity(; ρ=100), # water density
+#             HeatCapacity=ConstantHeatCapacity(; Cp=3.0e3),
+#             Conductivity=ConstantConductivity(; k=1.0),
+#             CompositeRheology=CompositeRheology((LinearViscous(; η=1.0e19),)),
+#         ),
+#     )
+# end
 
 function init_rheologies()
     # common physical properties
@@ -53,18 +99,20 @@ function init_rheologies()
         #  /___NUM__NU(Pa^MM*s)DE(J)V(J/bar)SS(Pa)_MM(Power)_____LL(KOEF)_____RO(kg/M^3)_____bRo(1/K)_____aRo(1/kbar)CP(J/kg)Kt(Wt/(m*K))_Ht(Wt/kg)
         #       num, minvis,maxvis,minsig,maxsig   1/prefac,     activ_energ.  act. vol       <diffcreep?>n(powerlaw)shrmod(Pa),fluidpres,coh1,coh2,  fric1,fric2,strweak?,strweak?,denscorr_markf0 unused, denscorr_markf1 unused.,density,      bb: tempdependence in adiab.          aa compr dep in adiab?    Cp????    base kt conduct. markkf temp dependence,markkp pressure dependence. ragiogenic heat prod. W/kg
         #       10  1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00         1e+07 1e+07 0.600 0.600 0.5      1.5      0                       0                       3.30E+03      3.00E-05                              1.00E-03                  1.00E+03  0.73E+00         12.93e+02              4.00E-06                    2.20E-08
+
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=0 + 1,
+            # Density=ConstantDensity(ρ=3300),
             Density=PT_Density(;
                 ρ0=3.30e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-11, # value (1e-3) was in Kilobar, here in Pascal, so 1e-8 different.
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.73e0,
                 b=12.93e2,
-                d=4.00e-6*1e-5,
+                d=4e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08 * 3.30e3),
             CompositeRheology=CompositeRheology((
@@ -77,10 +125,10 @@ function init_rheologies()
                     V=0.8e0,
                     n=3.5,
                 ),
-                # Drucker–Prager plasticity (non-regularised)
-                DruckerPrager(;
+                # Drucker–Prager plasticity
+                DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.6),
+                    ϕ=asind(0.6)
                 )
             )),
         ),
@@ -101,16 +149,17 @@ function init_rheologies()
         #       9   1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00 1e+07 1e+07 0.600 0.600 0.5 1.5 0 0  3.30E+03      3.00E-05      1.00E-03      1.00E+03      0.73E+00  12.93e+02  4.00E-06  2.20E-08
         SetMaterialParams(; Name="Mantle_DRY_1",
             Phase=2 + 1,
-                        Density=PT_Density(;
+            # Density=ConstantDensity(ρ=3300),
+            Density=PT_Density(;
                 ρ0=3.30e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-11, # value (1e-3) was in Kilobar, here in Pascal, so 1e-8 different.
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.73e0,
                 b=12.93e2,
-                d=4.00e-6*1e-5,
+                d=4e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08 * 3.30e3),
             CompositeRheology=CompositeRheology((
@@ -123,10 +172,10 @@ function init_rheologies()
                     V=0.8e0,
                     n=3.5,
                 ),
-                # Drucker–Prager plasticity (non-regularised)
-                DruckerPrager(;
+                # Drucker–Prager plasticity
+                DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.6),
+                    ϕ=asind(0.6)
                 )
             )),
         ),
@@ -143,13 +192,13 @@ function init_rheologies()
             Density=PT_Density(;
                 ρ0=3.30e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-3 * 1e-8,
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.73e0,
                 b=12.93e2,
-                d=4.00e-6*1e-5,
+                d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08 * 3.30e3),
             CompositeRheology=CompositeRheology((
@@ -165,7 +214,7 @@ function init_rheologies()
                 ),
 
                 # Drucker–Prager plasticity
-                DruckerPrager(;
+                DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.100),
                 )
@@ -177,17 +226,17 @@ function init_rheologies()
         #       /Basalts_WET_QUARTZITE_RANALLI_1995
         #       7   1e+17 1e+26 1e+00 5e+29        1.97E+17      1.54E+05      0.80E+00      3.00E+04     2.30E+00  2.5E+10  1.00 6e+06 6e+06 10.00 10.00 0.5 1.5 0 0  3.00E+03      3.00E-05      1.00E-03      1.00E+03      1.18E+00   4.74E+02  4.00E-06  0.25E-06
         SetMaterialParams(; Name="Hydrated_fractured_top_oceanic_crust_Thrust_Interface",
-            Phase=4+ 1 ,
+            Phase=4 + 1,
             Density=PT_Density(;
                 ρ0=3.00e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-3 * 1e-8,
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=1.18e0,
                 b=4.74e2,
-                d=4.00e-6*1e-5,
+                d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06 * 3.00e3),
             CompositeRheology=CompositeRheology((
@@ -198,7 +247,7 @@ function init_rheologies()
                     V=0.80e0,
                     n=2.3,
                 ),
-                DruckerPrager(;
+                DruckerPrager_regularised(;
                     C=6e6,
                     ϕ=asind(1.0),
                 )
@@ -214,13 +263,13 @@ function init_rheologies()
             Density=PT_Density(;
                 ρ0=3.00e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-3 * 1e-8,
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=1.18e0,
                 b=4.74e2,
-                d=4.00e-6*1e-5,
+                d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06 * 3.00e3),
             CompositeRheology=CompositeRheology((
@@ -231,7 +280,7 @@ function init_rheologies()
                     V=0.80e0,
                     n=3.2,
                 ),
-                DruckerPrager(;
+                DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.85),
                 )
@@ -247,13 +296,13 @@ function init_rheologies()
             Density=PT_Density(;
                 ρ0=2.70e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-3 * 1e-8,
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.64e0,
                 b=8.07e2,
-                d=4.00e-6*1e-5,
+                d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06 * 2.70e3),
             CompositeRheology=CompositeRheology((
@@ -264,7 +313,7 @@ function init_rheologies()
                     V=1.20e0,
                     n=2.3,
                 ),
-                DruckerPrager(;
+                DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.72),
                 )
@@ -280,13 +329,13 @@ function init_rheologies()
             Density=PT_Density(;
                 ρ0=2.70e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-3 * 1e-8,
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.64e0,
                 b=8.07e2,
-                d=4.00e-6*1e-5,
+                d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06 * 2.70e3),
             CompositeRheology=CompositeRheology((
@@ -302,7 +351,7 @@ function init_rheologies()
                 ),
 
                 # Drucker–Prager plasticity
-                DruckerPrager(;
+                DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.72),   # converting header friction to radians
                 )
@@ -317,13 +366,13 @@ function init_rheologies()
             Density=PT_Density(;
                 ρ0=2.60e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-3 * 1e-8,
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.64e0,
                 b=8.07e2,
-                d=4.00e-6*1e-5,
+                d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06 * 2.60e3),
             CompositeRheology=CompositeRheology((
@@ -339,7 +388,7 @@ function init_rheologies()
                 ),
 
                 # Drucker–Prager plasticity
-                DruckerPrager(;
+                DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.35),
                 )
@@ -354,13 +403,13 @@ function init_rheologies()
             Density=PT_Density(;
                 ρ0=2.60e3,
                 α=3.00e-5,
-                β=1.00e-3,
+                β=1.00e-3 * 1e-8,
             ),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.64e0,
                 b=8.07e2,
-                d=4.00e-6*1e-5,
+                d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06 * 2.60e3),
             CompositeRheology=CompositeRheology((
@@ -376,7 +425,7 @@ function init_rheologies()
                 ),
 
                 # Drucker–Prager plasticity
-                DruckerPrager(;
+                DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.35),
                 )

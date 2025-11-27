@@ -91,7 +91,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     max_xcell = 10 * 60
     min_xcell = 10 * 20
     particles = init_particles( # From JustPIC.jl/src/Particles/particles_utils.jl. Makes Particles struct: src/particles.jl. Don't know why its not linked.
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles) # JustRelax.jl/src/particles/subgrid_diffusion.jl
     grid_vxi = velocity_grids(xci, xvi, di) # JustRelax.jl/src/topology/Topology.jl
@@ -261,7 +261,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt) # JustPIC.jl/src/Particles/Advection/advection.jl
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)        # advect particles in memory
         # advect particles in memory
         move_particles!(particles, xvi, particle_args) # JustPIC.jl/src/Particles/move.jl
         # check if we need to inject particles
@@ -371,7 +371,7 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_SZU2019/Figures/SZU2019_v0.5"
+figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.5"
 n = 32 # *4
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
