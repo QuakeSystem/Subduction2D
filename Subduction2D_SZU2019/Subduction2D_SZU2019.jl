@@ -86,10 +86,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    #BERT addition 20nov 
-    nxcell = 10 * 40
-    max_xcell = 10 * 60
-    min_xcell = 10 * 20
+    nxcell = 40
+    max_xcell = 60
+    min_xcell = 20
     particles = init_particles( # From JustPIC.jl/src/Particles/particles_utils.jl. Makes Particles struct: src/particles.jl. Don't know why its not linked.
         backend_JP, nxcell, max_xcell, min_xcell, xvi...
     )
