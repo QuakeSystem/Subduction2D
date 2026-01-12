@@ -394,6 +394,15 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             colormap=:vik,
             colorrange=(vmin, vmax)
         )
+        # println(stokes, ρ)
+        # h2 = heatmap!(
+        #     ax2,
+        #     xvi[1] .* 1.0e-3,
+        #     xvi[2] .* 1.0e-3,
+        #     Array(stokes.ρ),
+        #     colormap=:vik,
+        #     # colorrange=(vmin, vmax)
+        # ),
         # Plot particles phase
         h3 = scatter!(ax3, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize=1)
         # Plot 2nd invariant of strain rate
