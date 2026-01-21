@@ -94,11 +94,7 @@ searchsorted
         #       num, minvis,maxvis,minsig,maxsig   1/prefac,     activ_energ.  act. vol       <diffcreep?>n(powerlaw)shrmod(Pa),fluidpres,coh1,coh2,  fric1,fric2,strweak?,strweak?,denscorr_markf0 unused, denscorr_markf1 unused.,density,      bb: tempdependence in adiab.          aa compr dep in adiab?    Cp????    base kt conduct. markkf temp dependence,markkp pressure dependence. ragiogenic heat prod. W/kg
         #       10  1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00         1e+07 1e+07 0.600 0.600 0.5      1.5      0                       0                       3.30E+03      3.00E-05                              1.00E-03                  1.00E+03  0.73E+00         12.93e+02              4.00E-06                    2.20E-08
 
-```
-Below function added to combine all rheologies used in SZU2019 model. No need for modularity currently.
-```
 function init_rheologies()
-
     # common physical properties
     # α = 2.4e-5 # 1 / K
     # Cp = 750    # J / kg K

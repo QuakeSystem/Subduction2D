@@ -89,21 +89,17 @@ searchsorted
 #     )
 # end
 
-        #       Mantle1_DRY_OL_Ranalli1995
-        #  /___NUM__NU(Pa^MM*s)DE(J)V(J/bar)SS(Pa)_MM(Power)_____LL(KOEF)_____RO(kg/M^3)_____bRo(1/K)_____aRo(1/kbar)CP(J/kg)Kt(Wt/(m*K))_Ht(Wt/kg)
-        #       num, minvis,maxvis,minsig,maxsig   1/prefac,     activ_energ.  act. vol       <diffcreep?>n(powerlaw)shrmod(Pa),fluidpres,coh1,coh2,  fric1,fric2,strweak?,strweak?,denscorr_markf0 unused, denscorr_markf1 unused.,density,      bb: tempdependence in adiab.          aa compr dep in adiab?    Cp????    base kt conduct. markkf temp dependence,markkp pressure dependence. ragiogenic heat prod. W/kg
-        #       10  1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00         1e+07 1e+07 0.600 0.600 0.5      1.5      0                       0                       3.30E+03      3.00E-05                              1.00E-03                  1.00E+03  0.73E+00         12.93e+02              4.00E-06                    2.20E-08
-
-```
-Below function added to combine all rheologies used in SZU2019 model. No need for modularity currently.
-```
 function init_rheologies()
-
     # common physical properties
     # α = 2.4e-5 # 1 / K
     # Cp = 750    # J / kg K
     # Define rheology struct
     return rheology = (
+        #       Mantle1_DRY_OL_Ranalli1995
+        #  /___NUM__NU(Pa^MM*s)DE(J)V(J/bar)SS(Pa)_MM(Power)_____LL(KOEF)_____RO(kg/M^3)_____bRo(1/K)_____aRo(1/kbar)CP(J/kg)Kt(Wt/(m*K))_Ht(Wt/kg)
+        #       num, minvis,maxvis,minsig,maxsig   1/prefac,     activ_energ.  act. vol       <diffcreep?>n(powerlaw)shrmod(Pa),fluidpres,coh1,coh2,  fric1,fric2,strweak?,strweak?,denscorr_markf0 unused, denscorr_markf1 unused.,density,      bb: tempdependence in adiab.          aa compr dep in adiab?    Cp????    base kt conduct. markkf temp dependence,markkp pressure dependence. ragiogenic heat prod. W/kg
+        #       10  1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00         1e+07 1e+07 0.600 0.600 0.5      1.5      0                       0                       3.30E+03      3.00E-05                              1.00E-03                  1.00E+03  0.73E+00         12.93e+02              4.00E-06                    2.20E-08
+
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=0 + 1,
             # Density=ConstantDensity(ρ=3300),
@@ -142,7 +138,6 @@ function init_rheologies()
         #       /Air
         #       0   1e+17 1e+17 0e+00 5e+04        1.00E+17      0.00E+05      0.00E+00      0.00E+04     1.00E+00  7.0E+11  0.00 0e+06 0e+06 0.000 0.000 0.0 1.0 0 0  1.00E+00      0.00E-05      0.00E-03      3.33E+06      2.00E+02   0.00E+00  0.00E+00  0.00E-10
         SetMaterialParams(;
-            Name="Air",
             Phase=1 + 1,
             Density=ConstantDensity(; ρ=1.00E+02), # water density
             HeatCapacity=ConstantHeatCapacity(; Cp=3.0e3),
@@ -150,10 +145,10 @@ function init_rheologies()
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+17),)),
         ),
 
-            #   Name = "Asthenosphere 2 for visualisation",
-            #   /Mantle_DRY_1
-            #   /Mantle1_DRY_OL_Ranalli1995
-            #   9   1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00 1e+07 1e+07 0.600 0.600 0.5 1.5 0 0  3.30E+03      3.00E-05      1.00E-03      1.00E+03      0.73E+00  12.93e+02  4.00E-06  2.20E-08
+        #       Name = "Asthenosphere 2 for visualisation",
+        #       /Mantle_DRY_1
+        #       /Mantle1_DRY_OL_Ranalli1995
+        #       9   1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00 1e+07 1e+07 0.600 0.600 0.5 1.5 0 0  3.30E+03      3.00E-05      1.00E-03      1.00E+03      0.73E+00  12.93e+02  4.00E-06  2.20E-08
         SetMaterialParams(; Name="Mantle_DRY_1",
             Phase=2 + 1,
             # Density=ConstantDensity(ρ=3300),

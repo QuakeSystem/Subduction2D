@@ -93,12 +93,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
-    # rheology_cpu = init_rheologies()
-    # rheology_gpu = CuArray([rheology_cpu])
-    # rheology = rheology_gpu[1]
-    # println("Number of rheologies: ", length(rheology))
-    # println("types rheology container: ", typeof(rheology))
-    # println("types of rheologies: ", typeof.(rheology))
     dt = 0.1 * 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -148,7 +142,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    ####### --- Albert, below the ABI memory error will trigger. --- ########
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims=2), dims=2), dims=2))
 
@@ -162,7 +155,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1.0e-8, CFL=0.95 / √2
     )
 
-    # Bert added: Special box of nodes where eastward slip of subducting plate is fixed.
+    # Bert added: subduction initiating slip. 
     # SZU2019 has box from xlim[180e3, 188e3], ylim[42.92e3, 66.6e3].
     nodes_boundary_box = Int[]
 
@@ -185,7 +178,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     flow_bcs = VelocityBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true),
         free_surface=false,
-        custom_slip=nodes_boundary_box, # hardcoded convergence. Will be fixed later.
+        custom_slip=nodes_boundary_box, # hardcoded convergence.
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions, custom edit
     update_halo!(@velocity(stokes)...) # Update the halo of the given GPU/CPU-array(s).
@@ -469,7 +462,7 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.58"
+figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.54"
 n = 32 * 2 * 2
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
@@ -490,13 +483,13 @@ isdir(figdir) || mkpath(figdir)
 
 # Get the directory of the currently-running script
 basepath = @__DIR__
-prefix = "used_"
+suffix = "_used"
 
 # Copy each script into the figdir folder
 for f in script_files
     src = joinpath(basepath, f)
     name, ext = splitext(f)
-    dest = joinpath(figdir, prefix * name * ext)
+    dest = joinpath(figdir, name * suffix * ext)
     cp(src, dest; force=true)
 end
 

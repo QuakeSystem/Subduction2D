@@ -92,13 +92,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheologies()
-    # rheology_cpu = init_rheologies()
-    # rheology_gpu = CuArray([rheology_cpu])
-    # rheology = rheology_gpu[1]
-    # println("Number of rheologies: ", length(rheology))
-    # println("types rheology container: ", typeof(rheology))
-    # println("types of rheologies: ", typeof.(rheology))
+    rheology_cpu = init_rheologies()
+    rheology_gpu = CuArray([rheology_cpu])
     dt = 0.1 * 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -121,7 +116,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Assign particles phases anomaly
     phases_device = PTArray(backend)(phases_GMG)
-    phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology_cpu), ni)
     init_phases!(pPhases, phases_device, particles, xvi)
     update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
     # ----------------------------------------------------
@@ -148,21 +143,20 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    ####### --- Albert, below the ABI memory error will trigger. --- ########
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology_cpu, (T=thermal.Tc, P=stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims=2), dims=2), dims=2))
 
     # Rheology
     args0 = (T=thermal.Tc, P=stokes.P, dt=Inf)
     viscosity_cutoff = (1.0e20, 5e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology_cpu, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1.0e-8, CFL=0.95 / √2
+        backend, rheology_cpu, phase_ratios, args0, dt, ni, di, li; ϵ=1.0e-8, CFL=0.95 / √2
     )
 
-    # Bert added: Special box of nodes where eastward slip of subducting plate is fixed.
+    # Bert added: subduction initiating slip. 
     # SZU2019 has box from xlim[180e3, 188e3], ylim[42.92e3, 66.6e3].
     nodes_boundary_box = Int[]
 
@@ -185,7 +179,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     flow_bcs = VelocityBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true),
         free_surface=false,
-        custom_slip=nodes_boundary_box, # hardcoded convergence. Will be fixed later.
+        custom_slip=nodes_boundary_box, # hardcoded convergence.
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions, custom edit
     update_halo!(@velocity(stokes)...) # Update the halo of the given GPU/CPU-array(s).
@@ -242,7 +236,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 flow_bcs,
                 ρg,
                 phase_ratios,
-                rheology,
+                rheology_cpu,
                 args,
                 dt,
                 igg;
@@ -274,7 +268,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             thermal,
             pt_thermal,
             thermal_bc,
-            rheology,
+            rheology_cpu,
             args,
             dt,
             di;
@@ -287,7 +281,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology_cpu, thermal, stokes, xci, di
         )
         centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
         subgrid_diffusion!(
@@ -469,7 +463,7 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.58"
+figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.55"
 n = 32 * 2 * 2
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
