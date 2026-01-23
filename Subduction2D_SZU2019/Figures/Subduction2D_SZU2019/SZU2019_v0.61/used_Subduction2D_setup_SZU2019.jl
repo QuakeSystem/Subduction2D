@@ -178,7 +178,7 @@ function GMG_subduction_2D(nx, ny)
         Grid2D;
         xlim=(854, 960, 970, 1007),
         zlim=(-12.5, -38, -38, -19.5),
-        phase=ConstantPhase(8), # NOTE: Changed this visualisation field 23 January 2026 to relieve size of Rheology tuple
+        phase=ConstantPhase(9), # √GeophysicalModelGenerator.jl/src/Setup_geometry.jl
         # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
