@@ -105,7 +105,7 @@ function init_rheologies()
     # Define rheology struct
     return rheology = (
         SetMaterialParams(; Name="Mantle1_DRY_0",
-            Phase=1,
+            Phase=0 + 1,
             Density=ConstantDensity(ρ=3300),
             # Density=PT_Density(;
             #     ρ0=3.30e3,
@@ -143,7 +143,7 @@ function init_rheologies()
         #       0   1e+17 1e+17 0e+00 5e+04        1.00E+17      0.00E+05      0.00E+00      0.00E+04     1.00E+00  7.0E+11  0.00 0e+06 0e+06 0.000 0.000 0.0 1.0 0 0  1.00E+00      0.00E-05      0.00E-03      3.33E+06      2.00E+02   0.00E+00  0.00E+00  0.00E-10
         SetMaterialParams(;
             Name="Air",
-            Phase=2,
+            Phase=1 + 1,
             Density=ConstantDensity(; ρ=1.00E+02), # water density
             HeatCapacity=ConstantHeatCapacity(; Cp=3.0e3),
             Conductivity=ConstantConductivity(; k=1.0),
@@ -155,7 +155,7 @@ function init_rheologies()
         #   /Mantle1_DRY_OL_Ranalli1995
         #   9   1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00 1e+07 1e+07 0.600 0.600 0.5 1.5 0 0  3.30E+03      3.00E-05      1.00E-03      1.00E+03      0.73E+00  12.93e+02  4.00E-06  2.20E-08
         # SetMaterialParams(; Name="Mantle_DRY_1",
-        #     Phase=3,
+        #     Phase=2 + 1,
         #     Density=ConstantDensity(ρ=3300),
         #     # Density=PT_Density(;
         #     #     ρ0=3.30e3,
@@ -196,7 +196,7 @@ function init_rheologies()
         #       3.30E+03      3.00E-05      1.00E-03      1.00E+03      
         #       0.73E+00  12.93e+02  4.00E-06  2.20E-08
         SetMaterialParams(; Name="Mantle_Weak_zone",
-            Phase=3, #4, #Making phases contiguous (28 jan, v0.76)
+            Phase=3 + 1,
             Density=ConstantDensity(ρ=3300),
             # Density=PT_Density(;
             #     ρ0=3.30e3,
@@ -236,7 +236,7 @@ function init_rheologies()
         #       /Basalts_WET_QUARTZITE_RANALLI_1995
         #       7   1e+17 1e+26 1e+00 5e+29        1.97E+17      1.54E+05      0.80E+00      3.00E+04     2.30E+00  2.5E+10  1.00 6e+06 6e+06 10.00 10.00 0.5 1.5 0 0  3.00E+03      3.00E-05      1.00E-03      1.00E+03      1.18E+00   4.74E+02  4.00E-06  0.25E-06
         SetMaterialParams(; Name="Hydrated_fractured_top_oceanic_crust_Thrust_Interface",
-            Phase=4, #5, #Making phases contiguous (28 jan, v0.76)
+            Phase=4 + 1,
             Density=ConstantDensity(ρ=3000),
             # Density=PT_Density(;
             #     ρ0=3.00e3,
@@ -270,7 +270,7 @@ function init_rheologies()
         #       /Basic_Crust2_An75_Ranalli1995
         #       8   1e+18 1e+26 0e-01 5e+29        4.80E+22      2.38E+05      0.80E+00      3.00E+04     3.20E+00  2.5E+10  1.00 1e+07 1e+07 0.850 0.850 0.5 1.5 0 0  3.00E+03      3.00E-05      1.00E-03      1.00E+03      1.18E+00   4.74E+02  4.00E-06  0.25E-06
         SetMaterialParams(; Name="Oceanic_Crust_(Gabbro)",
-            Phase=5, # 6, #Making phases contiguous (28 jan, v0.76)
+            Phase=5 + 1,
             Density=ConstantDensity(ρ=3000),
             # Density=PT_Density(;
             #     ρ0=3.00e3,
@@ -305,7 +305,7 @@ function init_rheologies()
         #       5   1e+18 1e+26 0e+00 5e+29        1.97E+17      1.54E+05      1.20E+00      3.00E+04     2.30E+00  2.5E+10  1.00 1e+07 1e+07 0.720 0.720 0.5 1.5 0 0  2.70E+03      3.00E-05      1.00E-03      1.00E+03      0.64E+00   8.07E+02  4.00E-06  1.00E-06
 
         SetMaterialParams(; Name="Felsic_Crust1",
-            Phase=6, # 7, #Making phases contiguous (28 jan, v0.76)
+            Phase=6 + 1,
             Density=ConstantDensity(ρ=2700),
             # Density=PT_Density(;
             #     ρ0=2.70e3,
@@ -339,7 +339,7 @@ function init_rheologies()
         #       /Felsic_Crust1_WET_QUARTZITE_RANALLI_1995
         #       6   1e+18 1e+26 0e+00 5e+29        1.97E+17      1.54E+05      1.20E+00      3.00E+04     2.30E+00  2.5E+10  1.00 1e+07 1e+07 0.720 0.720 0.5 1.5 0 0  2.70E+03      3.00E-05      1.00E-03      1.00E+03      0.64E+00   8.07E+02  4.00E-06  1.00E-06
         # SetMaterialParams(; Name="Felsic_Crust2",
-        #     Phase=8,
+        #     Phase=7 + 1,
         #     Density=ConstantDensity(ρ=2700),
         #     # Density=PT_Density(;
         #     #     ρ0=2.70e3,
@@ -377,8 +377,8 @@ function init_rheologies()
         #       /Sediments2_WET_QUARTZITE_RANALLI_1995
         #       3   1e+18 1e+26 1e+00 5e+29        1.97E+17      1.54E+05      0.80E+00      3.00E+04     2.30E+00  1.0E+10  1.00 1e+07 1e+07 0.350 0.350 0.5 1.5 0 0  2.60E+03      3.00E-05      1.00E-03      1.00E+03      0.64E+00   8.07E+02  4.00E-06  2.00E-06
         SetMaterialParams(; Name="Passive_margin_sediments2",
-            Phase=7, # 9,#Making phases contiguous (28 jan, v0.76)
-            Density=ConstantDensity(ρ=2600),
+            Phase=8 + 1,
+            Density=ConstantDensity(ρ=2700), #(ρ=2600),
             # Density=PT_Density(;
             #     ρ0=2.60e3,
             #     α=3.00e-5,
@@ -390,24 +390,24 @@ function init_rheologies()
                 b=8.07e2,
                 d=4.00e-6 * 1e-5 * 1e-6,
             ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3# H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 # Elasticity
-                ConstantElasticity(; G=1.0e10),
+                ConstantElasticity(; G=2.5e10),# G=1.0e10),
 
                 # Dislocation creep
                 DislocationCreep(;
                     # A=1 / 1.97e17,
                     A=3.2e-4,
                     E=1.54e5,
-                    V=8.0e-6,
+                    V=12.0e-6, #8.0e-6,
                     n=2.3,
                 ),
 
                 # Drucker–Prager plasticity
                 DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.35),
+                    ϕ=asind(0.72),# asind(0.35),
                     η_vp=0)
             )),
         ),
@@ -416,7 +416,7 @@ function init_rheologies()
         #       /Sediments3_WET_QUARTZITE_RANALLI_1995
         #       4   1e+18 1e+26 1e+00 5e+29        1.97E+17      1.54E+05      0.80E+00      3.00E+04     2.30E+00  1.0E+10  1.00 1e+07 1e+07 0.350 0.350 0.5 1.5 0 0  2.60E+03      3.00E-05      1.00E-03      1.00E+03      0.64E+00   8.07E+02  4.00E-06  2.00E-06
         # SetMaterialParams(; Name="Passive_margin_sediments3",
-        #     Phase=10,
+        #     Phase=9 + 1,
         #     Density=ConstantDensity(ρ=2600),
         #     # Density=PT_Density(;
         #     #     ρ0=2.60e3,

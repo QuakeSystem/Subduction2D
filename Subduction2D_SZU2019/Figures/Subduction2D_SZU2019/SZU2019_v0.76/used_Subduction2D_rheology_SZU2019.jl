@@ -306,7 +306,7 @@ function init_rheologies()
 
         SetMaterialParams(; Name="Felsic_Crust1",
             Phase=6, # 7, #Making phases contiguous (28 jan, v0.76)
-            Density=ConstantDensity(ρ=2700),
+            Density=ConstantDensity(ρ=3500),
             # Density=PT_Density(;
             #     ρ0=2.70e3,
             #     α=3.00e-5,
@@ -378,7 +378,7 @@ function init_rheologies()
         #       3   1e+18 1e+26 1e+00 5e+29        1.97E+17      1.54E+05      0.80E+00      3.00E+04     2.30E+00  1.0E+10  1.00 1e+07 1e+07 0.350 0.350 0.5 1.5 0 0  2.60E+03      3.00E-05      1.00E-03      1.00E+03      0.64E+00   8.07E+02  4.00E-06  2.00E-06
         SetMaterialParams(; Name="Passive_margin_sediments2",
             Phase=7, # 9,#Making phases contiguous (28 jan, v0.76)
-            Density=ConstantDensity(ρ=2600),
+            Density=ConstantDensity(ρ=2700), #(ρ=2600),
             # Density=PT_Density(;
             #     ρ0=2.60e3,
             #     α=3.00e-5,
@@ -390,24 +390,24 @@ function init_rheologies()
                 b=8.07e2,
                 d=4.00e-6 * 1e-5 * 1e-6,
             ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3# H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 # Elasticity
-                ConstantElasticity(; G=1.0e10),
+                ConstantElasticity(; G=2.5e10),# G=1.0e10),
 
                 # Dislocation creep
                 DislocationCreep(;
                     # A=1 / 1.97e17,
                     A=3.2e-4,
                     E=1.54e5,
-                    V=8.0e-6,
+                    V=12.0e-6, #8.0e-6,
                     n=2.3,
                 ),
 
                 # Drucker–Prager plasticity
                 DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.35),
+                    ϕ=asind(0.72),# asind(0.35),
                     η_vp=0)
             )),
         ),

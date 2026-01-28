@@ -117,7 +117,7 @@ function GMG_subduction_2D(nx, ny)
         # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
-    # # x: oceanic gabbro ## incorporated on top
+    # # x: oceanic gabbro ## incorporated on top # crashes when uncommented
     add_polygon!(
         Phases,
         Temp,

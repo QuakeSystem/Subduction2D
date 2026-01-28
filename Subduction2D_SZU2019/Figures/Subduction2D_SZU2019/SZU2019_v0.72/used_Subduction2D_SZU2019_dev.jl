@@ -369,23 +369,21 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         visc_max = log10(1e24)   # 24
 
         # Make Makie figure
-        fig = Figure(size=(1500, 1000), title="t = $t")   # bigger figure
         ar = 2
-
+        fig = Figure(size=(1200, 700), title="t = $t")
         ax1 = Axis(fig[1, 1], aspect=ar, title="Temperature [K]")
-        ax2 = Axis(fig[2, 1], aspect=ar, title="Vx [m/s]")
+        ax2 = Axis(fig[2, 1], aspect=ar, title="Vx [m/s]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
         ax3 = Axis(fig[1, 3], aspect=ar, title="Phase")
         ax4 = Axis(fig[2, 3], aspect=ar, title="log10(εII)")
         ax5 = Axis(fig[1, 5], aspect=ar, title="log10(η)")
         ax6 = Axis(fig[2, 5], aspect=ar, title="log10(η_vep)")
-        ax7 = Axis(fig[3, 1], aspect=ar, title="Density [kg/m³]")  # new
 
 
         # --- ZOOM REGION ---
         xmin, xmax = 800, 1100     # km
         zmin, zmax = -80, 0     # km depth (negative)
 
-        for ax in (ax1, ax2, ax3, ax4, ax5, ax6, ax7)
+        for ax in (ax1, ax2, ax3, ax4, ax5, ax6)
             xlims!(ax, xmin, xmax)
             ylims!(ax, zmin, zmax)
         end
@@ -430,14 +428,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             colormap=:vik,
             colorrange=(visc_min, visc_max)
         )
-        h7 = heatmap!(
-            ax7,
-            xci[1] .* 1e-3,  # x in km
-            xci[2] .* 1e-3,  # z in km
-            Array(ustrip.(ρg[2] ./ g));  # density in kg/m³
-            colormap=:vik,
-            colorrange=(2600, 3300)
-        )
+
 
         hidexdecorations!(ax1)
         hidexdecorations!(ax2)
@@ -451,16 +442,12 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             (2, 4, h4),
             (1, 6, h5),
             (2, 6, h6),
-            (3, 2, h7),   # density
-            # (3, 2, nothing),
-            # (3, 3, nothing)
         ]
             gl = fig[row, col] = GridLayout()            # overwrite the cell with a layout
-            Colorbar(gl[1, 1], h; height=120)           # set desired height
+            Colorbar(gl[1, 1], h; height=120)            # set desired height
         end
 
-        # Link axes for consistent zoom
-        linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7)
+        linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6)
         fig
         save(joinpath(figdir, "$(it).png"), fig)
 
@@ -482,7 +469,7 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.78"
+figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.72"
 n = 32 * 2
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
