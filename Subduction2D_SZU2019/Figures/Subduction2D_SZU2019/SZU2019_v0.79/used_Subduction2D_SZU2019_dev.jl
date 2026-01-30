@@ -81,7 +81,6 @@ end
 
 
 
-
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk=false)
 
@@ -94,6 +93,12 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
+    # rheology_cpu = init_rheologies()
+    # rheology_gpu = CuArray([rheology_cpu])
+    # rheology = rheology_gpu[1]
+    # println("Number of rheologies: ", length(rheology))
+    # println("types rheology container: ", typeof(rheology))
+    # println("types of rheologies: ", typeof.(rheology))
     dt = 10.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter, seconds
     # ----------------------------------------------------
 
@@ -143,6 +148,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
+    ####### --- Albert, below the ABI memory error will trigger. --- ########
     compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims=2), dims=2), dims=2))
 
@@ -155,39 +161,35 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     pt_thermal = PTThermalCoeffs(
         backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1.0e-8, CFL=0.95 / √2
     )
-    ###### Work in progress, not ready for GPU yet. ######
+
     # Bert added: Special box of nodes where eastward slip of subducting plate is fixed.
-    # Work in progress, since v0.10 and working on CPU in v0.86.
-    # Will be replaced with a GPU-compatible version.
     # SZU2019 has box from xlim[180e3, 188e3], ylim[42.92e3, 66.6e3].
-    nodes_boundary_box = Int[]
+    # nodes_boundary_box = Int[]
 
     # xlim velocitybox: [180, 188 km], now implmented at [176, 187.5]
     # ylim velocitybox: [-66, 43 km], now at [-68.0, 44.5 km]
-    for i in (ny+2)-15:(ny+2)-10
-        # for i in (ny+2)-30:(ny+2)-20
-        push!(nodes_boundary_box, 16 + i * (nx + 1))
-        push!(nodes_boundary_box, 17 + i * (nx + 1))
-        # push!(nodes_boundary_box, 32 + i * (nx + 1))
-        # push!(nodes_boundary_box, 34 + i * (nx + 1))
-        println("xcoord, y coord:", grid_vxi[1][1][16], grid_vxi[1][2][i])
-        println("xcoord, y coord:", grid_vxi[1][1][17], grid_vxi[1][2][i])
-        # println("xcoord, y coord:", grid_vxi[1][1][32], grid_vxi[1][2][i])
-        # println("xcoord, y coord:", grid_vxi[1][1][34], grid_vxi[1][2][i])
-    end
-    println(nodes_boundary_box)
+    # for i in (ny+2)-15:(ny+2)-10
+    #     # for i in (ny+2)-30:(ny+2)-20
+    #     push!(nodes_boundary_box, 16 + i * (nx + 1))
+    #     push!(nodes_boundary_box, 17 + i * (nx + 1))
+    #     # push!(nodes_boundary_box, 32 + i * (nx + 1))
+    #     # push!(nodes_boundary_box, 34 + i * (nx + 1))
+    #     println("xcoord, y coord:", grid_vxi[1][1][16], grid_vxi[1][2][i])
+    #     println("xcoord, y coord:", grid_vxi[1][1][17], grid_vxi[1][2][i])
+    #     # println("xcoord, y coord:", grid_vxi[1][1][32], grid_vxi[1][2][i])
+    #     # println("xcoord, y coord:", grid_vxi[1][1][34], grid_vxi[1][2][i])
+    # end
+    # println(nodes_boundary_box)
 
     # Boundary conditions
-    # Custom box BCs for CPU version
     flow_bcs = VelocityBoundaryConditions(;
         free_slip=(left=true, right=true, top=true, bot=true),
         free_surface=false,
-        custom_slip=nodes_boundary_box, # hardcoded convergence. Will be fixed later.
+        # custom_slip=nodes_boundary_box, # hardcoded convergence. Will be fixed later.
     )
-
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions, custom edit
     update_halo!(@velocity(stokes)...) # Update the halo of the given GPU/CPU-array(s).
-    ######### End WIP   
+
     # IO -------------------------------------------------
     # if it does not exist, make folder where figures are stored
     if do_vtk
@@ -368,18 +370,10 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         visc_min = log10(1e20)   # 18
         visc_max = log10(1e24)   # 24
 
-        t_Myr = t / (3600 * 24 * 365.25 * 1.0e6)
-        t_Myr_round = round(t_Myr; digits=2)
         # Make Makie figure
-        fig = Figure(size=(1500, 600), title="t = $t_Myr_round")
-        Label(
-            fig[0, :],
-            "Subduction2D - SZU2019, t = $t_Myr_round Myr",
-            fontsize=28,
-            tellwidth=false
-        )
+        fig = Figure(size=(1500, 600), title="t = $t")   # bigger figure
+        ar = 2.8
 
-        ar = 2.8 # aspect ratio
         ax1 = Axis(fig[1, 1], aspect=ar, title="Material Phase")
         ax2 = Axis(fig[2, 1], aspect=ar, title="Temperature [K]")
         ax3 = Axis(fig[3, 1], aspect=ar, title="Density [kg/m³]")
@@ -412,9 +406,9 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             ax3,
             xci[1] .* 1e-3,  # x in km
             xci[2] .* 1e-3,  # z in km
-            Array(ustrip.(ρg[2] ./ 9.81));  # density in kg/m³
+            Array(ustrip.(ρg[2] ./ g));  # density in kg/m³
             colormap=:vik,
-            colorrange=(2500, 3300)
+            colorrange=(2600, 3300)
         )
         # Plot Vx with limited range
         h4 = heatmap!(
@@ -460,6 +454,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             colorrange=(visc_min, visc_max)
         )
 
+
+
+
+        # hidexdecorations!(ax1)
+        # hidexdecorations!(ax2)
+        # hidexdecorations!(ax3)
+        # hidexdecorations!(ax4)
         # --- COLORBARS WITH REDUCED HEIGHT ---
         for (row, col, h) in [
             (1, 2, h1),   # Material Phase
@@ -469,7 +470,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             (2, 4, h5),   # Vy
             (3, 4, h6),   # τII
             (1, 6, h7),   # log10(εII)
-            (2, 6, h8),   # log10(η)
+            (3, 6, h8),   # log10(η)
             (3, 6, h9),   # log10(η_vep)
         ]
             gl = fig[row, col] = GridLayout()            # overwrite the cell with a layout
@@ -481,7 +482,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         fig
         save(joinpath(figdir, "$(it).png"), fig)
 
+
+
+
+
     end
+
+
 
     # ------------------------------
 
@@ -490,10 +497,11 @@ end
 
 
 
+
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.87"
-n = 32 * 2 #* 2
+figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_v0.79"
+n = 32 * 2 * 2
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

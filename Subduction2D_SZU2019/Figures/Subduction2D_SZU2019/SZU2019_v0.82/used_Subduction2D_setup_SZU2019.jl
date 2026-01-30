@@ -2,6 +2,7 @@ using GeophysicalModelGenerator
 
 function GMG_subduction_2D(nx, ny)
     model_depth = 300.0 # km
+    # Our starting basis is the example above with ridge and overriding slab
     nx, nz = nx, ny
     Tbot = 1474.0
     xmin = 0
@@ -13,20 +14,20 @@ function GMG_subduction_2D(nx, ny)
     Phases = zeros(Int64, nx, 1, nz)
     Temp = fill(Tbot, nx, 1, nz)
     Tlab = 1300
+    # lith   = LithosphericPhases(Layers=[80], Phases=[1 0], Tlab=Tlab)
 
     # phases
-    # These were all unique up to v0.75 (28 jan 2026). Now made contiguous for simplicity (and prevent ABI overload).
     # 1: asthenosphere - mantle
-    # 2: air
-    # 3: mantle weakzone
+    # 5: air
+    # 1: asthenosphere - mantle
+    # x: mantle weakzone
     # 4: oceanic crust
-    # 5: oceanic gabbro
-    # 6: felsic crust
-    # 7: sediments
-    # 4: deflected oceanic crust
-    # 5: deflected gabbro
+    # x: oceanic gabbro
+    # x: felsic crust (two parts for visualization)
+    # x: sediments
+    # x: deflected oceanic crust
+    # x: deflected gabbro
 
-    # Temperature field is simple layers + halfspace cooling. To be improved.
     add_box!(
         Phases,
         Temp,
@@ -57,7 +58,6 @@ function GMG_subduction_2D(nx, ny)
         T=LinearTemp(Ttop=Tlab, Tbot=Tbot)
     )
 
-    # Material phases described with polygons similar to SZU2019.
     # 0: asthenosphere - mantle
     add_box!(
         Phases,
@@ -66,7 +66,8 @@ function GMG_subduction_2D(nx, ny)
         xlim=(xmin, xmax),
         zlim=(-model_depth, 0),
         Origin=nothing, StrikeAngle=0, DipAngle=0,
-        phase=ConstantPhase(1),
+        phase=ConstantPhase(1), # √GeophysicalModelGenerator.jl/src/Setup_geometry.jl
+        # T=HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=50, Adiabat=0)
     )
     # 2: air
     # added explicitly at end?
@@ -77,7 +78,8 @@ function GMG_subduction_2D(nx, ny)
         xlim=(xmin, xmax),
         zlim=(-12.5, extra_air_thickness),
         Origin=nothing, StrikeAngle=0, DipAngle=0,
-        phase=ConstantPhase(2),
+        phase=ConstantPhase(2), # √GeophysicalModelGenerator.jl/src/Setup_geometry.jl
+        # T=HalfspaceCoolingTemp(Tsurface=20, Tmantle=Tbot, Age=50, Adiabat=0)
     )
 
     # x: asthenosphere2 - for visualisation
@@ -88,6 +90,7 @@ function GMG_subduction_2D(nx, ny)
         xlim=(xmin, xmin, xmax, xmax),
         zlim=(-19.5, -112.5, -112.5, -19.5),
         phase=ConstantPhase(1), # NOTE: Changed this visualisation field 23 January 2026 to relieve size of Rheology tuple
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
 
@@ -99,9 +102,10 @@ function GMG_subduction_2D(nx, ny)
         xlim=(920, 1035, 1050, 970),
         zlim=(-25, -80, -80, -38),
         phase=ConstantPhase(3) #4),#Making phases contiguous (28 jan, v0.76)
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
-    # # 4: oceanic crust/interface material
+    # # 3: oceanic crust/interface material
     add_polygon!(
         Phases,
         Temp,
@@ -109,9 +113,11 @@ function GMG_subduction_2D(nx, ny)
         xlim=(0, 0, 916, 902),
         zlim=(-12.5, -19.5, -19.5, -12.5),
         phase=ConstantPhase(4),# 5)#Making phases contiguous (28 jan, v0.76)
+        # T=LithosphericTemp(Tsurface=20, Tpot=Tbot)
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
-    # # 5: oceanic gabbro ## incorporated on top
+    # # x: oceanic gabbro ## incorporated on top
     add_polygon!(
         Phases,
         Temp,
@@ -119,10 +125,11 @@ function GMG_subduction_2D(nx, ny)
         xlim=(0, 0, 916, 906),
         zlim=(-14.5, -19.5, -19.5, -14.5),
         phase=ConstantPhase(5)# 6)#Making phases contiguous (28 jan, v0.76)
+        # T=LinearTemp(Ttop=200, Tbot=Tbot)
     )
 
     ####
-    # 6: felsic crust1
+    # x: felsic crust1
     add_polygon!(
         Phases,
         Temp,
@@ -130,6 +137,7 @@ function GMG_subduction_2D(nx, ny)
         xlim=(954, 854, xmax, xmax),
         zlim=(-8, -19.5, -11.5, -8),
         phase=ConstantPhase(6) # 7),#Making phases contiguous (28 jan, v0.76) 
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
     add_polygon!(
         Phases,
@@ -138,9 +146,10 @@ function GMG_subduction_2D(nx, ny)
         xlim=(854, 890, xmax, xmax),
         zlim=(-19.5, -23, -23, -11.5),
         phase=ConstantPhase(6) # 7),#Making phases contiguous (28 jan, v0.76) 
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
-    # 6: felsic crust 2
+    # x: felsic crust 2
     add_polygon!(
         Phases,
         Temp,
@@ -148,9 +157,10 @@ function GMG_subduction_2D(nx, ny)
         xlim=(890, 960, xmax, xmax),
         zlim=(-23, -38, -38, -23),
         phase=ConstantPhase(6) # 7),#Making phases contiguous (28 jan, v0.76)  # NOTE: Changed this visualisation field 23 January 2026 to relieve size of Rheology tuple
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
-    # 7: sediments
+    # x: sediments
     add_polygon!(
         Phases,
         Temp,
@@ -158,9 +168,10 @@ function GMG_subduction_2D(nx, ny)
         xlim=(954, 854, 1007, 1030),
         zlim=(-8, -12.5, -19.5, -8),
         phase=ConstantPhase(7) # 9), #Making phases contiguous (28 jan, v0.76)
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
-    # 7: sediments 2
+    # x: sediments 2
     add_polygon!(
         Phases,
         Temp,
@@ -168,11 +179,12 @@ function GMG_subduction_2D(nx, ny)
         xlim=(854, 960, 970, 1007),
         zlim=(-12.5, -38, -38, -19.5),
         phase=ConstantPhase(7) # 9), #Making phases contiguous (28 jan, v0.76) # NOTE: Changed this visualisation field 23 January 2026 to relieve size of Rheology tuple
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
 
     #   /Deflected_Hydrated_fractured_top_oceanic_crust_Thrust_Interface
-    # Same rheology as Oceanic Crust (4)
+    # Same rheology as Oceanic Crust
     add_polygon!(
         Phases,
         Temp,
@@ -180,10 +192,11 @@ function GMG_subduction_2D(nx, ny)
         xlim=(854, 854, 967, 980),
         zlim=(-12.5, -18.5, -39.3, -33),
         phase=ConstantPhase(4)# 5),#Making phases contiguous (28 jan, v0.76)
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
 
     #    /Deflected_Crust_(Gabbro)
-    # Same rheology as Oceanic crust (Gabbro) (5)
+    # Same rheology as Oceanic crust (Gabbro)
     add_polygon!(
         Phases,
         Temp,
@@ -191,7 +204,36 @@ function GMG_subduction_2D(nx, ny)
         xlim=(854, 854, 925, 900),
         zlim=(-14.5, -19.5, -32, -21),
         phase=ConstantPhase(5)# 6),#Making phases contiguous (28 jan, v0.76)
+        # T=LinearTemp(Ttop=20, Tbot=Tbot)
     )
+
+
+
+    #       Fixed_Air
+    # add_polygon!(
+    #     Phases,
+    #     Temp,
+    #     Grid2D;
+    #     xlim=(),
+    #     zlim=(),
+    #     phase=LithosphericPhases(Layers=[], Phases=[12], Tlab=Tlab), # √GeophysicalModelGenerator.jl/src/Setup_geometry.jl
+    #     # T=LinearTemp(Ttop=20, Tbot=Tbot)
+    # )
+
+    # #       Fixed_Asthenosphere
+    # add_polygon!(
+    #     Phases,
+    #     Temp,
+    #     Grid2D;
+    #     xlim=(),
+    #     zlim=(),
+    #     phase=LithosphericPhases(Layers=[], Phases=[13], Tlab=Tlab), # √GeophysicalModelGenerator.jl/src/Setup_geometry.jl
+    #     # T=LinearTemp(Ttop=20, Tbot=Tbot)
+    # )
+
+    # surf = Grid2D.z.val .> 0.0
+    # Temp[surf] .= 20.0
+    # Phases[surf] .= 3
 
     Grid2D = addfield(Grid2D, (; Phases, Temp))
     # write_paraview(Grid2D, "Initial_Setup_Subduction_rank")
