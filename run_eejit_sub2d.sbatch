@@ -7,7 +7,7 @@
 #SBATCH --exclusive
 #SBATCH -o job.%N.%j.out  # STDOUT
 #SBATCH -e job.%N.%j.err  # STDERR
-#SBATCH --job-name v0.96
+#SBATCH --job-name sub2d_eejit
 #SBATCH -t 30-00:00:00
 
 
@@ -74,5 +74,5 @@ echo "Running on hosts: $SLURM_NODELIST"
 echo "Current working directory is `pwd`"
 
 echo "  submitting the first job: `date` "
-julia --project ./Subduction2D_SZU2019/Subduction2D_SZU2019_dev.jl
+julia --project ./Subduction2D_SZU2019/Subduction2D_SZU2019.jl
 echo "  first job finished: `date` "
