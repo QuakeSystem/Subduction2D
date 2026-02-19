@@ -1,17 +1,17 @@
 using GeophysicalModelGenerator
 
 function GMG_subduction_2D(nx, ny)
-    model_depth = 300.0 # km
+    model_depth = 175.0 # km
     nx, nz = nx, ny
-    Tbot = 1474.0
-    xmin = 0
-    xmax = 1500 # km
-    extra_air_thickness = 0 #12.5
+    Tbot = 1718 - 273.15 # K, 1445 C, from Katsura 2022
+    xmin = 0 # km, left edge of model
+    xmax = 1500 # km, right edge of model
+    extra_air_thickness = 0 # km, can be increased
     x = range(0, xmax, nx)
     z = range(-model_depth, extra_air_thickness, nz)
     Grid2D = CartData(xyz_grid(x, 0, z))
     Phases = zeros(Int64, nx, 1, nz)
-    Temp = fill(Tbot, nx, 1, nz)
+    Temp = fill(0.0, nx, 1, nz)
     Tlab = 1300
 
     # phases
@@ -26,61 +26,70 @@ function GMG_subduction_2D(nx, ny)
     # 4: deflected oceanic crust
     # 5: deflected gabbro
 
-    # Temperature field is simple layers + halfspace cooling. To be improved.
-    add_box!(
+
+    #### Temperature fields. Four total
+    # Subducting plate temperature, halfspace cooling (80 Myr age)
+    add_polygon!(
         Phases,
         Temp,
         Grid2D;
-        xlim=(xmin, xmax),
-        zlim=(-8, 0),
-        phase=ConstantPhase(1),
+        xlim=(854, 940, 1035, 1100, xmin, xmin),
+        zlim=(-12.5, -35, -80, -112.5, -112.5, -12.5),
+        T=HalfspaceCoolingTemp(Tsurface=0, Tmantle=Tlab, Age=80, Adiabat=0.5)
+    )
+
+    # Overriding plate temperature, linear geotherm with T0=0 and Tbot=TLab=1300C
+    # NOTE: slight error for the left top edge (-12.5km to -8 km gradient), as temperature here is 0-39C at the surface (gradient is vertical with -8 as surface, leaving left side exposed
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim=(854, 940, 1035, 1100, xmax, xmax, 954),
+        zlim=(-12.5, -35, -80, -112.5, -112.5, -8, -8),
+        T=LinearTemp(Ttop=0, Tbot=Tlab)
+    )
+
+    # Air temperature, constant zero C.
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim=(xmin, xmin, 854,  954, xmax, xmax),
+        zlim=(extra_air_thickness,-12.5, -12.5,  -8, -8, extra_air_thickness),
         T=ConstantTemp(T=0)
     )
 
-    add_box!(
-        Phases,
-        Temp,
-        Grid2D;
-        xlim=(xmin, xmax),
-        zlim=(-112.5, -8),
-        phase=ConstantPhase(1),
-        T=HalfspaceCoolingTemp(Tsurface=0, Tmantle=Tlab, Age=40, Adiabat=0)
-    )
-
+    # Mantle temperature, linear geotherm with TLab = 1300 and T = Tbot 1445 C, from Katsura 2022.
     add_box!(
         Phases,
         Temp,
         Grid2D;
         xlim=(xmin, xmax),
         zlim=(-model_depth, -112.5),
-        phase=ConstantPhase(1),
         T=LinearTemp(Ttop=Tlab, Tbot=Tbot)
     )
 
-    # Material phases described with polygons similar to SZU2019.
-    # 0: asthenosphere - mantle
+    #### Material phases described with polygons similar to SZU2019.
+    #  asthenosphere - mantle
     add_box!(
         Phases,
         Temp,
         Grid2D;
         xlim=(xmin, xmax),
         zlim=(-model_depth, 0),
-        Origin=nothing, StrikeAngle=0, DipAngle=0,
         phase=ConstantPhase(1),
     )
-    # 2: air
-    # added explicitly at end?
+    # air
     add_box!(
         Phases,
         Temp,
         Grid2D;
         xlim=(xmin, xmax),
         zlim=(-12.5, extra_air_thickness),
-        Origin=nothing, StrikeAngle=0, DipAngle=0,
         phase=ConstantPhase(2),
     )
 
-    # x: asthenosphere2 - for visualisation
+    # asthenosphere
     add_polygon!(
         Phases,
         Temp,
@@ -91,7 +100,7 @@ function GMG_subduction_2D(nx, ny)
     )
 
 
-    # # x: mantle weakzone
+    # mantle weakzone
     add_polygon!(
         Phases,
         Temp,
@@ -101,28 +110,27 @@ function GMG_subduction_2D(nx, ny)
         phase=ConstantPhase(3) #4),#Making phases contiguous (28 jan, v0.76)
     )
 
-    # # 4: oceanic crust/interface material
+    # oceanic crust/interface material
     add_polygon!(
         Phases,
         Temp,
         Grid2D;
-        xlim=(0, 0, 916, 902),
+        xlim=(xmin, xmin, 916, 902),
         zlim=(-12.5, -19.5, -19.5, -12.5),
         phase=ConstantPhase(4),# 5)#Making phases contiguous (28 jan, v0.76)
     )
 
-    # # 5: oceanic gabbro ## incorporated on top
+    # oceanic gabbro
     add_polygon!(
         Phases,
         Temp,
         Grid2D;
-        xlim=(0, 0, 916, 906),
+        xlim=(xmin, xmin, 916, 906),
         zlim=(-14.5, -19.5, -19.5, -14.5),
         phase=ConstantPhase(5)# 6)#Making phases contiguous (28 jan, v0.76)
     )
 
-    ####
-    # 6: felsic crust1
+    # felsic crust 1
     add_polygon!(
         Phases,
         Temp,
@@ -140,7 +148,7 @@ function GMG_subduction_2D(nx, ny)
         phase=ConstantPhase(6) # 7),#Making phases contiguous (28 jan, v0.76) 
     )
 
-    # 6: felsic crust 2
+    # felsic crust 2
     add_polygon!(
         Phases,
         Temp,
@@ -150,7 +158,7 @@ function GMG_subduction_2D(nx, ny)
         phase=ConstantPhase(6) # 7),#Making phases contiguous (28 jan, v0.76)  # NOTE: Changed this visualisation field 23 January 2026 to relieve size of Rheology tuple
     )
 
-    # 7: sediments
+    # sediments
     add_polygon!(
         Phases,
         Temp,
@@ -160,7 +168,7 @@ function GMG_subduction_2D(nx, ny)
         phase=ConstantPhase(7) # 9), #Making phases contiguous (28 jan, v0.76)
     )
 
-    # 7: sediments 2
+    # sediments 2
     add_polygon!(
         Phases,
         Temp,
@@ -199,7 +207,7 @@ function GMG_subduction_2D(nx, ny)
     origin = (x[1], z[1]) .* 1.0e3
 
     ph = Phases[:, 1, :]
-    T = Temp[:, 1, :]
+    T = Temp[:, 1, :] .+ 273
 
     return li, origin, ph, T
 end

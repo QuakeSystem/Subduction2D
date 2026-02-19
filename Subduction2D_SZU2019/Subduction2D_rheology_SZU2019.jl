@@ -1,120 +1,31 @@
 using GeoParams.Dislocation
 using GeoParams.Diffusion
 using GeoParams.MaterialParameters
-searchsorted
-
-function init_rheology_nonNewtonian()
-    #dislocation laws
-    disl_wet_olivine = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
-    # diffusion laws
-    diff_wet_olivine = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
-
-    el = ConstantElasticity(; G=40.0e9)
-
-    lithosphere_rheology = CompositeRheology((el, disl_wet_olivine, diff_wet_olivine))
-    return init_rheologies(lithosphere_rheology)
-end
-
-function init_rheology_nonNewtonian_plastic()
-    #dislocation laws
-    disl_wet_olivine = SetDislocationCreep(Dislocation.wet_olivine1_Hirth_2003)
-    # diffusion laws
-    diff_wet_olivine = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
-    # plasticity
-    ϕ_wet_olivine = asind(0.1)
-    C_wet_olivine = 1.0e6
-    η_reg = 1.0e16
-    el = ConstantElasticity(; G=40.0e9, ν=0.45)
-    lithosphere_rheology = CompositeRheology(
-        (
-        el,
-        disl_wet_olivine,
-        diff_wet_olivine,
-        DruckerPrager_regularised(; C=C_wet_olivine, ϕ=ϕ_wet_olivine, η_vp=η_reg, Ψ=0.0), # non-regularized plasticity
-    )
-    )
-    return init_rheologies(lithosphere_rheology)
-end
-
-function init_rheology_linear()
-    el = ConstantElasticity(; G=40.0e9, ν=0.45)
-    # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
-    lithosphere_rheology = CompositeRheology((LinearViscous(; η=1.0e23), el))
-    return init_rheologies(lithosphere_rheology)
-end
-
-
-function init_rheologies()
-    el = ConstantElasticity(; G=40.0e9, ν=0.45)
-    # lithosphere_rheology = CompositeRheology( (LinearViscous(; η=1e23), ))
-    lithosphere_rheology = CompositeRheology((LinearViscous(; η=1.0e23), el))
-    # common physical properties
-    α = 2.4e-5 # 1 / K
-    Cp = 750    # J / kg K
-    # Define rheolgy struct
-    return rheology = (
-        # Name = "Asthenoshpere",
-        SetMaterialParams(;
-            Phase=1,
-            Density=ConstantDensity(; ρ=3.2e3),
-            HeatCapacity=ConstantHeatCapacity(; Cp=Cp),
-            Conductivity=ConstantConductivity(; k=2.5),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.0e20),)),
-            Gravity=ConstantGravity(; g=9.81),
-        ),
-        # Name              = "Oceanic lithosphere",
-        SetMaterialParams(;
-            Phase=2,
-            Density=PT_Density(; ρ0=3.2e3, α=α, β=0.0e0, T0=273 + 1474),
-            HeatCapacity=ConstantHeatCapacity(; Cp=Cp),
-            Conductivity=ConstantConductivity(; k=2.5),
-            CompositeRheology=lithosphere_rheology,
-        ),
-        # Name              = "oceanic crust",
-        SetMaterialParams(;
-            Phase=3,
-            Density=ConstantDensity(; ρ=3.2e3),
-            HeatCapacity=ConstantHeatCapacity(; Cp=Cp),
-            Conductivity=ConstantConductivity(; k=2.5),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.0e20),)),
-        ),
-        # Name              = "StickyAir",
-        SetMaterialParams(;
-            Phase=4,
-            Density=ConstantDensity(; ρ=100), # water density
-            HeatCapacity=ConstantHeatCapacity(; Cp=3.0e3),
-            Conductivity=ConstantConductivity(; k=1.0),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.0e19),)),
-        ),
-    )
-end
-
-#       Mantle1_DRY_OL_Ranalli1995
-#  /___NUM__NU(Pa^MM*s)DE(J)V(J/bar)SS(Pa)_MM(Power)_____LL(KOEF)_____RO(kg/M^3)_____bRo(1/K)_____aRo(1/kbar)CP(J/kg)Kt(Wt/(m*K))_Ht(Wt/kg)
-#       num, minvis,maxvis,minsig,maxsig   1/prefac,     activ_energ.  act. vol       <diffcreep?>n(powerlaw)shrmod(Pa),fluidpres,coh1,coh2,  fric1,fric2,strweak?,strweak?,denscorr_markf0 unused, denscorr_markf1 unused.,density,      bb: tempdependence in adiab.          aa compr dep in adiab?    Cp????    base kt conduct. markkf temp dependence,markkp pressure dependence. ragiogenic heat prod. W/m3
-#       10  1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00         1e+07 1e+07 0.600 0.600 0.5      1.5      0                       0                       3.30E+03      3.00E-05                              1.00E-03                  1.00E+03  0.73E+00         12.93e+02              4.00E-06                    2.20E-08
 
 #=
 Below function added to combine all rheologies used in SZU2019 model. No need for modularity currently.
 
     1. Function has been edited to make phase numbers contiguous (28 jan, v0.76)
     2. Conductivity parameter d is currently not sufficient. Some error in conversion between SZU2019 and GeoParams / Gerya's values.
-    3. Same for Dislocation Creep. Dislocation creep parameters A, E, V, n are commented out for now (and are therefore some default). To be added later.
-    4. Rheology names are kept the same as in SZU2019 for clarity.
-    5. Density is currently constant, but should be expanded to PT_Density later. 
+    3. Rheology names are kept the same as in SZU2019 for clarity.
 
-    Comments and commented out blocks have been cleaned up for clarity between v0.86 and v0.87.
 =#
 function init_rheologies()
 
     # common physical properties
-    # α = 2.4e-5 # 1 / K
+    α = 2.4e-5 # 1 / K
     # Cp = 750    # J / kg K
     # Define rheology struct
     return rheology = (
+        #=       Mantle1_DRY_OL_Ranalli1995
+                /___NUM__NU(Pa^MM*s)DE(J)V(J/bar)SS(Pa)_MM(Power)_____LL(KOEF)_____RO(kg/M^3)_____bRo(1/K)_____aRo(1/kbar)CP(J/kg)Kt(Wt/(m*K))_Ht(Wt/kg)
+                num, minvis,maxvis,minsig,maxsig   1/prefac,     activ_energ.  act. vol       <diffcreep?>n(powerlaw)shrmod(Pa),fluidpres,coh1,coh2,  fric1,fric2,strweak?,strweak?,denscorr_markf0 unused, denscorr_markf1 unused.,density,      bb: tempdependence in adiab.          aa compr dep in adiab?    Cp????    base kt conduct. markkf temp dependence,markkp pressure dependence. ragiogenic heat prod. W/m3
+               10  1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00         1e+07 1e+07 0.600 0.600 0.5      1.5      0                       0                       3.30E+03      3.00E-05                              1.00E-03                  1.00E+03  0.73E+00         12.93e+02              4.00E-06                    2.20E-08
+        =#
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=1,
-            Density=ConstantDensity(ρ=3300), # Can and should be expanded to PT_Density
+            # Density=ConstantDensity(ρ=3300), # Can and should be expanded to PT_Density
+            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.73e0,
@@ -126,13 +37,14 @@ function init_rheologies()
                 # elasticity
                 ConstantElasticity(; G=6.7e10),
                 # dislocation creep
-                DislocationCreep(;
-                # A=1 / 3.98e16,
-                # A=2.5125e4,
-                # E=5.32e5,
-                # V=8.0e-6,
-                # n=3.5,
-                ),
+                SetDislocationCreep(Dislocation.dry_olivine_Hirth_2003),
+                # DislocationCreep(;
+                # # A=1 / 3.98e16,
+                # # A=2.5125e4,
+                # # E=5.32e5,
+                # # V=8.0e-6,
+                # # n=3.5,
+                # ),
                 # Drucker–Prager plasticity
                 DruckerPrager_regularised(;
                     C=1e7,
@@ -175,17 +87,11 @@ function init_rheologies()
                 ConstantElasticity(; G=6.7e10),
 
                 # dislocation creep (wet olivine)
-                DislocationCreep(;
-                # A=1 / 5.01e20,
-                # A=1.996e3,
-                # E=4.70e5,
-                # V=8.0e-6,
-                # n=4.0,
-                ),
+                SetDislocationCreep(Dislocation.wet_olivine2_Hirth_2003),
 
                 # Drucker–Prager plasticity
                 DruckerPrager_regularised(;
-                    C=1e7,
+                    C=2e6,#1e7, # edit v0.101
                     ϕ=asind(0.100),
                     η_vp=0)
             )),
@@ -207,15 +113,10 @@ function init_rheologies()
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10),
-                DislocationCreep(;
-                # A=3.2e-4,
-                # E=1.54e5,
-                # V=8.0e-6,
-                # n=2.3,
-                ),
+                SetDislocationCreep(Dislocation.wet_quartzite_Hirth_2001),
                 DruckerPrager_regularised(;
                     C=6e6,
-                    ϕ=asind(0.5),
+                    ϕ=asind(0.025), # edit v0.101
                     η_vp=0)
             )),
         ),
@@ -244,7 +145,7 @@ function init_rheologies()
                 # n=3.2,
                 ),
                 DruckerPrager_regularised(;
-                    C=1e7,
+                    C=200e6,
                     ϕ=asind(0.85),
                     η_vp=0)
             )),
@@ -266,14 +167,9 @@ function init_rheologies()
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10),
-                DislocationCreep(;
-                # A=3.2e-4,
-                # E=1.54e5,
-                # V=12.0e-6,
-                # n=2.3,
-                ),
+                SetDislocationCreep(Dislocation.wet_quartzite_Hirth_2001),
                 DruckerPrager_regularised(;
-                    C=1e7,
+                    C=200e8,
                     ϕ=asind(0.72),
                     η_vp=0)
             )),
@@ -297,17 +193,10 @@ function init_rheologies()
                 ConstantElasticity(; G=1.0e10),
 
                 # Dislocation creep
-                DislocationCreep(;
-                # A=1 / 1.97e17,
-                # A=3.2e-4,
-                # E=1.54e5,
-                # V=8.0e-6,
-                # n=2.3,
-                ),
-
+                SetDislocationCreep(Dislocation.wet_quartzite_Hirth_2001),
                 # Drucker–Prager plasticity
                 DruckerPrager_regularised(;
-                    C=1e7,
+                    C=200e6,
                     ϕ=asind(0.35),
                     η_vp=0)
             )),
