@@ -29,31 +29,12 @@
 # Note if you get comments about time limit than you are not in the
 # sallocated terminal
 
-# - matlab -:
-# interactive job above
-# module load matlab
-# srun matlab - on command line
-# matlab & - GUI
-#
-
-# -- execute runs --
-#module load gcc    
-#module load intel/14.0.1
-#module load openmpi/icc-14.0.1
-#module load hdf5/1.8.11-intel
-#module load mkl/11.1.1.106-intel14.0.1
-#module load lapack
 
 module purge
 module load development
 # module load CUDA/12.5 # on gpu nodes
-# module load dev2024 # on cpu nodes
+module load dev2024 # on cpu nodes
 
-# module load devIntel2018
-# module load libraries
-# module load MKL/2024.2.0.664
-
-# export OMP_NUM_THREADS=6
 
 export JULIA_SSL_NO_VERIFY_HOSTS="*"
 export OPENSSL_DIR=""
