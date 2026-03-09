@@ -396,29 +396,32 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Bert added: Special box of nodes where eastward slip of subducting plate is fixed.
     # Work in progress, since v0.10 and working on CPU in v0.86.
     # Will be replaced with a GPU-compatible version.
-    nodes_boundary_box = Int[]
-    for j in 1:ny
-        for i in 1:nx
 
-            if 170.0e3 < grid_vxi[1][1][i] < 190.0e3 && # x-coordinates velocity-box
-                    -68.0e3 < grid_vxi[1][2][j] < -24.5e3 # z-coordinates velocity-box
+    # Vx array and sizes
+    Vx = stokes.V.Vx
+    nxV, nyV = size(Vx)
 
-                push!(nodes_boundary_box, i + j * (nx + 1))
-                # println(
-                #     "x coord, y coord: ",
-                #     grid_vxi[1][1][i], ", ",
-                #     grid_vxi[1][2][j]
-                # )
+    # Coordinates of Vx nodes
+    xV = grid_vxi[1][1]   # length nxV
+    zV = grid_vxi[1][2]   # length nyV
+
+    # Dirichlet mask
+    mask = falses(nxV, nyV)
+
+    for j in 1:nyV
+        for i in 1:nxV
+            if 170e3 < xV[i] < 190e3 &&
+            -68e3 < zV[j] < -24.5e3
+                mask[i, j] = true
             end
         end
     end
 
     # Boundary conditions
-    # Custom box BCs for CPU version
     flow_bcs = VelocityBoundaryConditions(;
-        free_slip = (left = true, right = true, top = true, bot = true),
+        free_slip    = (left = true, right = true, top = true, bot = true),
         free_surface = false,
-        custom_slip = nodes_boundary_box, # hardcoded convergence. Will be fixed later.
+        dirichlet    = (; constant = 7.5e-2 / (3600 * 24 * 365.25), mask = mask),
     )
 
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions, custom edit
@@ -645,11 +648,11 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.132"
-figdir = "Subduction2D"#"C:/Users/5723272/SD/Subduction2D_output/Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_$version"
+version = "v0.135"
+figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_$version"
 println(version)
-n = 32 * 2
-nx, ny = n * 10, 96
+n = 32 
+nx, ny = n*2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
