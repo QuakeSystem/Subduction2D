@@ -39,5 +39,8 @@ Unidecode = "967fb449-e509-55aa-8007-234b4096b967"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
-[sources]
-JustRelax = {path = "../JustRelax.jl"}
+[extras]
+CUDA_Runtime_jll = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"
+
+[sources.JustRelax]
+path = "../JustRelax.jl"

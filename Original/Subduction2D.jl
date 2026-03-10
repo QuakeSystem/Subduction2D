@@ -136,11 +136,38 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ = 1.0e-8, CFL = 0.95 / √2
     )
 
+    # Vx array and sizes
+    Vx = stokes.V.Vx
+    nxV, nyV = size(Vx)
+
+    # Coordinates of Vx nodes
+    xV = grid_vxi[1][1]   # length nxV
+    zV = grid_vxi[1][2]   # length nyV
+
+    # Dirichlet mask
+    mask = falses(nxV, nyV)
+
+    for j in 1:nyV
+        for i in 1:nxV
+            if 170e3 < xV[i] < 190e3 &&
+            -68e3 < zV[j] < -24.5e3
+                mask[i, j] = true
+                println("Dirichlet BC at (", xV[i], ", ", zV[j], ")")
+            end
+        end
+    end
+
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
-        free_slip = (left = true, right = true, top = true, bot = true),
+        free_slip    = (left = true, right = true, top = true, bot = true),
         free_surface = false,
+        dirichlet    = (; constant = 7.5e-2 / (3600 * 24 * 365.25), mask = mask),
     )
+#     # Boundary conditions
+#     flow_bcs = VelocityBoundaryConditions(;
+#         free_slip = (left = true, right = true, top = true, bot = true),
+#         free_surface = false,
+#     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
