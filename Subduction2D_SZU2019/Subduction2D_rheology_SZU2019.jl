@@ -199,9 +199,14 @@ function init_rheologies()
                     C=200e6,
                     ϕ=asind(0.35),
                     η_vp=0)
-            )),
-        ),
-    )
+            )),),
+        SetMaterialParams(; Name="left_boundary",
+            Phase=8, # 9,#Making phases contiguous (28 jan, v0.76)
+            Density=ConstantDensity(; ρ=2600), # Can and should be expanded to PT_Density
+            HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
+            Conductivity=ConstantConductivity(; k=1.0),
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),))
+        ))
 
 end
 

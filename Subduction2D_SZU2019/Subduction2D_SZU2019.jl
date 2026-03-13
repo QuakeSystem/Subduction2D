@@ -645,11 +645,12 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.132"
+version = "v0.139"
 figdir = "Subduction2D"#"C:/Users/5723272/SD/Subduction2D_output/Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_$version"
 println(version)
-n = 32 * 2
-nx, ny = n * 10, 96
+n = 64
+# nx, ny = n * 10, 96
+nx, ny = n * 5, 48
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
