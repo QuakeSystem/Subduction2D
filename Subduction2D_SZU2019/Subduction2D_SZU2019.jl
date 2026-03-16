@@ -401,7 +401,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         for i in 1:nx
 
             if 170.0e3 < grid_vxi[1][1][i] < 190.0e3 && # x-coordinates velocity-box
-                    -68.0e3 < grid_vxi[1][2][j] < -24.5e3 # z-coordinates velocity-box
+                    -66.6e3 < grid_vxi[1][2][j] < -43.0e3 # z-coordinates velocity-box
 
                 push!(nodes_boundary_box, i + j * (nx + 1))
                 # println(
@@ -453,7 +453,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Time loop
     t, it = 0.0, 0
 
-    while it < 500 # run only for 5 Myr
+    while it < 1000
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -645,11 +645,12 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.132"
-figdir = "Subduction2D"#"C:/Users/5723272/SD/Subduction2D_output/Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_$version"
+version = "v0.144"
+figdir = "Subduction2D" # Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_$version"
 println(version)
-n = 32 * 2
-nx, ny = n * 10, 96
+n = 64
+# nx, ny = n * 10, 96
+nx, ny = n * 5, 48
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)

@@ -200,6 +200,17 @@ function GMG_subduction_2D(nx, ny)
         zlim=(-14.5, -19.5, -32, -21),
         phase=ConstantPhase(5)# 6),#Making phases contiguous (28 jan, v0.76)
     )
+    #    left boundary
+    # low viscous left boundary
+    add_box!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim=(0,4),
+        zlim=(-100, 0),
+        phase=ConstantPhase(8)
+    )
+
 
     Grid2D = addfield(Grid2D, (; Phases, Temp))
     # write_paraview(Grid2D, "Initial_Setup_Subduction_rank")
