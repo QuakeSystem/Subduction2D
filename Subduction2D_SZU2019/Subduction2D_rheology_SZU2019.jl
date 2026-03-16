@@ -25,7 +25,7 @@ function init_rheologies()
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=1,
             # Density=ConstantDensity(ρ=3300), # Can and should be expanded to PT_Density
-            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
+            Density = PT_Density(; ρ0 = 3.3e3, α = 3e-5, β = 1e-3, T0 = 0, P0=1e-4),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.73e0,
