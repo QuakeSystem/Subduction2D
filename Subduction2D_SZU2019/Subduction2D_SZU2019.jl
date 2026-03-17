@@ -85,17 +85,23 @@ function make_figure(
         Vx_limited, Vy_limited,
         pxv, pyv, clr, idxv,
         xmin, xmax, zmin, zmax,
-        figpath
+        figpath; version = nothing
     )
 
     # Add isotherms
     isotherms_C = [100, 150, 350, 450, 900, 1300]
     isotherms_K = isotherms_C .+ 273
-    
-    # Match the T_buffer slicing
-    xT = xvi[1][2:end-1] .* 1e-3
-    zT = xvi[2] .* 1e-3
-    TT = Array(T_buffer[2:end-1, :])
+
+    # Vertex grid (for T, V, etc.)
+    xv = xvi[1][2:end-1] .* 1e-3
+    yv = xvi[2] .* 1e-3
+    Tv = Array(T_buffer[2:end-1, :])
+
+    # Cell-centered grid (for density, stress, viscosity)
+    xc = xci[1] .* 1e-3
+    yc = xci[2] .* 1e-3
+    ρ  = Array(ustrip.(ρg[2])) ./ 9.81
+    isograds_density = [2700, 2800, 2900, 3100, 3200, 3250, 3300, 3350]
 
     # Velocity plot limits at 10 cm/yr (unit is in m/s)
     vmin = -0.1 / (365.25 * 24 * 3600)
@@ -115,10 +121,14 @@ function make_figure(
     t_Kyr = round(dt / (3600 * 24 * 365.25 * 1000); digits = 2)
 
     fig = Figure(size = (1500, 600))
+
+    fig[0, :] = GridLayout()
+
     Label(
-        fig[0, :],
-        "Subduction2D - SZU2019 | t = $t_Myr_round Myr | dt = $t_Kyr Kyr",
+        fig[0, 1],
+        "Subduction2D - SZU2019 | version: $version | t = $t_Myr_round Myr | dt = $t_Kyr Kyr",
         fontsize = 28,
+        halign = :center,
         tellwidth = false
     )
 
@@ -145,9 +155,9 @@ function make_figure(
 
     contour!(
         ax1,
-        xT,
-        zT,
-        TT;
+        xv,
+        yv,
+        Tv;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -158,17 +168,17 @@ function make_figure(
     # Temperature
     h2 = heatmap!(
         ax2,
-        xvi[1] .* 1.0e-3,
-        xvi[2] .* 1.0e-3,
+        xc,
+        yc,
         Array(T_buffer[2:(end - 1), :]),
         colormap = :vik
     )
 
     contour!(
         ax2,
-        xT,
-        zT,
-        TT;
+        xv,
+        yv,
+        Tv;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -180,19 +190,19 @@ function make_figure(
     # Density
     h3 = heatmap!(
         ax3,
-        xci[1] .* 1.0e-3,
-        xci[2] .* 1.0e-3,
-        Array(ustrip.(ρg[2] ./ 9.81));
+        xc,
+        yc,
+        ρ;
         colormap = :vik,
         colorrange = (2500, 3300)
     )
 
     contour!(
         ax3,
-        xT,
-        zT,
-        TT;
-        levels = isotherms_K,
+        xc,
+        yc,
+        ρ;
+        levels = isograds_density,
         labels=true,
         labelsize = 12,
         color = :white,
@@ -202,8 +212,8 @@ function make_figure(
     # Velocity x-direction
     h4 = heatmap!(
         ax4,
-        xvi[1] .* 1.0e-3,
-        xvi[2] .* 1.0e-3,
+        xv,
+        yv,
         Vx_limited;
         colormap = :vik,
         colorrange = (vmin, vmax)
@@ -212,8 +222,8 @@ function make_figure(
     # Velocity y-direction
     h5 = heatmap!(
         ax5,
-        xvi[1] .* 1.0e-3,
-        xvi[2] .* 1.0e-3,
+        xv,
+        yv,
         Vy_limited;
         colormap = :vik,
         colorrange = (vmin, vmax)
@@ -222,8 +232,8 @@ function make_figure(
     # Second invariant of the stress tensor
     h6 = heatmap!(
         ax6,
-        xci[1] .* 1.0e-3,
-        xci[2] .* 1.0e-3,
+        xc,
+        yc,
         Array(log10.(stokes.τ.II)),
         colormap = :batlow
     )
@@ -231,8 +241,8 @@ function make_figure(
     # Second invariant of the strain rate tensor
     h7 = heatmap!(
         ax7,
-        xci[1] .* 1.0e-3,
-        xci[2] .* 1.0e-3,
+        xc,
+        yc,
         Array(log10.(stokes.ε.II));
         colormap = :vik,
         colorrange = (ε_min, ε_max)
@@ -240,9 +250,9 @@ function make_figure(
 
     contour!(
         ax7,
-        xT,
-        zT,
-        TT;
+        xv,
+        yv,
+        Tv;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -253,17 +263,17 @@ function make_figure(
     # Viscosity
     h8 = heatmap!(
         ax8,
-        xci[1] .* 1.0e-3,
-        xci[2] .* 1.0e-3,
+        xc,
+        yc,
         Array(log10.(stokes.viscosity.η));
         colormap = :vik,
         colorrange = (visc_min, visc_max)
     )
     contour!(
         ax8,
-        xT,
-        zT,
-        TT;
+        xv,
+        yv,
+        Tv;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -274,17 +284,17 @@ function make_figure(
     # Visco_plasto_elastic viscosity
     h9 = heatmap!(
         ax9,
-        xci[1] .* 1.0e-3,
-        xci[2] .* 1.0e-3,
+        xc,
+        yc,
         Array(log10.(stokes.viscosity.η_vep));
         colormap = :vik,
         colorrange = (visc_min, visc_max)
     )
     contour!(
         ax9,
-        xT,
-        zT,
-        TT;
+        xv,
+        yv,
+        Tv;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -318,7 +328,7 @@ end
 
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
+function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false, version = nothing)
 
     # Physical domain ------------------------------------
     ni = nx, ny           # number of cells
@@ -621,7 +631,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             Vx_limited, Vy_limited,
             pxv, pyv, clr, idxv,
             xmin_zoom, xmax_zoom, zmin_zoom, zmax_zoom,
-            joinpath(figdir, "$(lpad(it, 2, "0"))_zoom.png")
+            joinpath(figdir, "zoom_$(lpad(it, 2, "0")).png"), version=version
         )
 
         # FULL DOMAIN FIGURE
@@ -633,7 +643,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             Vx_limited, Vy_limited,
             pxv, pyv, clr, idxv,
             xmin_full, xmax_full, zmin_full, zmax_full,
-            joinpath(figdir, "$(lpad(it, 2, "0"))_full.png")
+            joinpath(figdir, "full_$(lpad(it, 2, "0")).png"); version=version
         )
     end
 
@@ -645,7 +655,7 @@ end
 
 # ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.145"
+version = "v0.149"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_SZU2019/SZU2019_$version"
 println(version)
 n = 64
@@ -681,4 +691,4 @@ for f in script_files
 end
 
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, version = version);
