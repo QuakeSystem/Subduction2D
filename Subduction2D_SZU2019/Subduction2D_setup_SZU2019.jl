@@ -1,4 +1,5 @@
 using GeophysicalModelGenerator
+# GMG requires Celcius inputs, but JustRelax needs Kelvin. Observe conversion at the bottom of this script
 
 function GMG_subduction_2D(nx, ny)
     model_depth = 175.0 # km

@@ -17,15 +17,11 @@ function init_rheologies()
     # Cp = 750    # J / kg K
     # Define rheology struct
     return rheology = (
-        #=       Mantle1_DRY_OL_Ranalli1995
-                /___NUM__NU(Pa^MM*s)DE(J)V(J/bar)SS(Pa)_MM(Power)_____LL(KOEF)_____RO(kg/M^3)_____bRo(1/K)_____aRo(1/kbar)CP(J/kg)Kt(Wt/(m*K))_Ht(Wt/kg)
-                num, minvis,maxvis,minsig,maxsig   1/prefac,     activ_energ.  act. vol       <diffcreep?>n(powerlaw)shrmod(Pa),fluidpres,coh1,coh2,  fric1,fric2,strweak?,strweak?,denscorr_markf0 unused, denscorr_markf1 unused.,density,      bb: tempdependence in adiab.          aa compr dep in adiab?    Cp????    base kt conduct. markkf temp dependence,markkp pressure dependence. ragiogenic heat prod. W/m3
-               10  1e+18 1e+26 0e+00 5e+29        3.98E+16      5.32E+05      0.80E+00      3.00E+04     3.50E+00  6.7E+10  1.00         1e+07 1e+07 0.600 0.600 0.5      1.5      0                       0                       3.30E+03      3.00E-05                              1.00E-03                  1.00E+03  0.73E+00         12.93e+02              4.00E-06                    2.20E-08
-        =#
+        # SZU material 10
+        #Mantle1_DRY_OL_Ranalli1995
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=1,
-            # Density=ConstantDensity(ρ=3300), # Can and should be expanded to PT_Density
-            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
+            Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.73e0,
@@ -34,18 +30,13 @@ function init_rheologies()
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((
-                # elasticity
                 ConstantElasticity(; G=6.7e10),
-                # dislocation creep
-                SetDislocationCreep(Dislocation.dry_olivine_Hirth_2003),
-                # DislocationCreep(;
-                # # A=1 / 3.98e16,
-                # # A=2.5125e4,
-                # # E=5.32e5,
-                # # V=8.0e-6,
-                # # n=3.5,
-                # ),
-                # Drucker–Prager plasticity
+                DislocationCreep(;
+                A=2.513e-17,
+                E=5.32e5,
+                V=8.0e-6,
+                n=3.5,
+                ),
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.6),
@@ -54,8 +45,8 @@ function init_rheologies()
             )),
         ),
 
+        # SZU material 0
         #       /Air
-        #       0   1e+17 1e+17 0e+00 5e+04        1.00E+17      0.00E+05      0.00E+00      0.00E+04     1.00E+00  7.0E+11  0.00 0e+06 0e+06 0.000 0.000 0.0 1.0 0 0  1.00E+00      0.00E-05      0.00E-03      3.33E+06      2.00E+02   0.00E+00  0.00E+00  0.00E-10
         SetMaterialParams(;
             Name="Air",
             Phase=2,
@@ -65,16 +56,12 @@ function init_rheologies()
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+17),)),
         ),
 
+        # SZU material 12
         #       /Mantle_Weak_zone
         #       Shear_Zone_Mantle4_WET_OL_Ranalli1995
-        #       12  1e+18 1e+26 0e+00 5e+29        5.01E+20      
-        #       4.70E+05      0.80E+00      3.00E+04     4.00E+00  
-        #       6.7E+10  1.00 1e+07 1e+07 0.100 0.100 0.5 1.5 0 0  
-        #       3.30E+03      3.00E-05      1.00E-03      1.00E+03      
-        #       0.73E+00  12.93e+02  4.00E-06  2.20E-08
         SetMaterialParams(; Name="Mantle_Weak_zone",
             Phase=3, #4, #Making phases contiguous (28 jan, v0.76)
-            Density=ConstantDensity(ρ=3300), # Can and should be expanded to PT_Density
+            Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=TP_Conductivity(;
                 a=0.73e0,
@@ -83,13 +70,13 @@ function init_rheologies()
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
             CompositeRheology=CompositeRheology((
-                # elasticity
                 ConstantElasticity(; G=6.7e10),
-
-                # dislocation creep (wet olivine)
-                SetDislocationCreep(Dislocation.wet_olivine2_Hirth_2003),
-
-                # Drucker–Prager plasticity
+                DislocationCreep(;
+                A=1.9960e-21,
+                E=4.7e5,
+                V=8.0e-6,
+                n=4,
+                ),
                 DruckerPrager_regularised(;
                     C=2e6,#1e7, # edit v0.101
                     ϕ=asind(0.100),
@@ -97,10 +84,10 @@ function init_rheologies()
             )),
         ),
 
+        # SZU material 7
         #       Oceanic crust-interface material
         #       /Hydrated_fractured_top_oceanic_crust_Thrust_Interface
         #       /Basalts_WET_QUARTZITE_RANALLI_1995
-        #       7   1e+17 1e+26 1e+00 5e+29        1.97E+17      1.54E+05      0.80E+00      3.00E+04     2.30E+00  2.5E+10  1.00 6e+06 6e+06 10.00 10.00 0.5 1.5 0 0  3.00E+03      3.00E-05      1.00E-03      1.00E+03      1.18E+00   4.74E+02  4.00E-06  0.25E-06
         SetMaterialParams(; Name="Hydrated_fractured_top_oceanic_crust_Thrust_Interface",
             Phase=4, #5, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=3000), # Can and should be expanded to PT_Density
@@ -113,7 +100,12 @@ function init_rheologies()
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10),
-                SetDislocationCreep(Dislocation.wet_quartzite_Hirth_2001),
+                DislocationCreep(;
+                A=5.076142131979696e-18,
+                E=1.54e5,
+                V=8.0e-6,
+                n=2.3,
+                ),
                 DruckerPrager_regularised(;
                     C=6e6,
                     ϕ=asind(0.025), # edit v0.101
@@ -121,10 +113,9 @@ function init_rheologies()
             )),
         ),
 
-
+        # SZU material 8
         #       /Oceanic_Crust_(Gabbro)
         #       /Basic_Crust2_An75_Ranalli1995
-        #       8   1e+18 1e+26 0e-01 5e+29        4.80E+22      2.38E+05      0.80E+00      3.00E+04     3.20E+00  2.5E+10  1.00 1e+07 1e+07 0.850 0.850 0.5 1.5 0 0  3.00E+03      3.00E-05      1.00E-03      1.00E+03      1.18E+00   4.74E+02  4.00E-06  0.25E-06
         SetMaterialParams(; Name="Oceanic_Crust_(Gabbro)",
             Phase=5, # 6, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=3000), # Can and should be expanded to PT_Density
@@ -138,11 +129,10 @@ function init_rheologies()
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10),
                 DislocationCreep(;
-                # A=1 / 4.80e22,
-                # A=3.3e-4,
-                # E=2.38e5,
-                # V=8.0e-6,
-                # n=3.2,
+                A=2.0833333333333332e-23,
+                E=2.38e5,
+                V=8.0e-6,
+                n=3.2,
                 ),
                 DruckerPrager_regularised(;
                     C=200e6,
@@ -151,10 +141,9 @@ function init_rheologies()
             )),
         ),
 
+        # SZU material 5/6
         #       /Felsic_Crust1
         #       /Felsic_Crust1_WET_QUARTZITE_RANALLI_1995
-        #       5   1e+18 1e+26 0e+00 5e+29        1.97E+17      1.54E+05      1.20E+00      3.00E+04     2.30E+00  2.5E+10  1.00 1e+07 1e+07 0.720 0.720 0.5 1.5 0 0  2.70E+03      3.00E-05      1.00E-03      1.00E+03      0.64E+00   8.07E+02  4.00E-06  1.00E-06
-
         SetMaterialParams(; Name="Felsic_Crust1",
             Phase=6, # 7, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=2700), # Can and should be expanded to PT_Density
@@ -167,7 +156,12 @@ function init_rheologies()
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10),
-                SetDislocationCreep(Dislocation.wet_quartzite_Hirth_2001),
+                DislocationCreep(;
+                A=5.076142131979696e-18,
+                E=1.54e5,
+                V=12e-6,
+                n=2.3,
+                ),
                 DruckerPrager_regularised(;
                     C=200e8,
                     ϕ=asind(0.72),
@@ -175,9 +169,9 @@ function init_rheologies()
             )),
         ),
 
+        # SZU material 3
         #       /Passive_margin_sediments
         #       /Sediments2_WET_QUARTZITE_RANALLI_1995
-        #       3   1e+18 1e+26 1e+00 5e+29        1.97E+17      1.54E+05      0.80E+00      3.00E+04     2.30E+00  1.0E+10  1.00 1e+07 1e+07 0.350 0.350 0.5 1.5 0 0  2.60E+03      3.00E-05      1.00E-03      1.00E+03      0.64E+00   8.07E+02  4.00E-06  2.00E-06
         SetMaterialParams(; Name="Passive_margin_sediments2",
             Phase=7, # 9,#Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=2600), # Can and should be expanded to PT_Density
@@ -189,20 +183,21 @@ function init_rheologies()
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
-                # Elasticity
                 ConstantElasticity(; G=1.0e10),
-
-                # Dislocation creep
-                SetDislocationCreep(Dislocation.wet_quartzite_Hirth_2001),
-                # Drucker–Prager plasticity
+                DislocationCreep(;
+                A=5.076142131979696e-18,
+                E=1.54e5,
+                V=8e-6,
+                n=2.3,
+                ),
                 DruckerPrager_regularised(;
                     C=200e6,
                     ϕ=asind(0.35),
                     η_vp=0)
             )),),
-        SetMaterialParams(; Name="left_boundary",
-            Phase=8, # 9,#Making phases contiguous (28 jan, v0.76)
-            Density=ConstantDensity(; ρ=2600), # Can and should be expanded to PT_Density
+        SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
+            Phase=8,
+            Density=ConstantDensity(; ρ=2600),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
             Conductivity=ConstantConductivity(; k=1.0),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),))
