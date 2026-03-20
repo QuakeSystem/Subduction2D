@@ -14,6 +14,11 @@ function init_rheologies()
 
     # common physical properties
     α = 2.4e-5 # 1 / K
+    # lambda λ is Pf/Ps, 0.4 for any hydrostatic material, 0.6 for some and 0.95 for weak materials.
+    λ_hydrostatic = 0.4
+    λ_medium = 0.6
+    λ_weak = 0.95
+    
     # Cp = 750    # J / kg K
     # Define rheology struct
     return rheology = (
@@ -39,7 +44,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.6),
+                    ϕ=asind(0.6*(1-λ_hydrostatic)),
                     η_vp=0
                 )
             )),
@@ -79,7 +84,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=2e6,#1e7, # edit v0.101
-                    ϕ=asind(0.100),
+                    ϕ=asind(0.100*(1-λ_medium)),
                     η_vp=0)
             )),
         ),
@@ -108,7 +113,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=6e6,
-                    ϕ=asind(0.025), # edit v0.101
+                    ϕ=asind(0.5*(1-λ_weak)), # Only value not exactly same as SZU2019, as mu there is 10 (??)
                     η_vp=0)
             )),
         ),
@@ -136,7 +141,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=200e6,
-                    ϕ=asind(0.85),
+                    ϕ=asind(0.85*(1-λ_weak)),
                     η_vp=0)
             )),
         ),
@@ -164,7 +169,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=200e8,
-                    ϕ=asind(0.72),
+                    ϕ=asind(0.72*(1-λ_hydrostatic)),
                     η_vp=0)
             )),
         ),
@@ -192,7 +197,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=200e6,
-                    ϕ=asind(0.35),
+                    ϕ=asind(0.35*(1-λ_medium)),
                     η_vp=0)
             )),),
         SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
