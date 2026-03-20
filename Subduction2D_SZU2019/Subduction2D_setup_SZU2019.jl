@@ -1,6 +1,49 @@
 using GeophysicalModelGenerator
 # GMG requires Celcius inputs, but JustRelax needs Kelvin. Observe conversion at the bottom of this script
 
+
+struct VelBox2D
+    cenx::Float64
+    cenz::Float64
+    widthx::Float64
+    widthz::Float64
+    vx::Float64
+    vy::Float64
+    has_vx::Bool
+    has_vy::Bool
+end
+
+const vel_boxes_2D = VelBox2D[]
+
+function add_vel_box!(
+    ; cenx,
+      cenz,
+      widthx,
+      widthz,
+      vx = nothing,
+      vy = nothing,
+)
+    vx_val = vx === nothing ? 0.0 : Float64(vx)
+    vy_val = vy === nothing ? 0.0 : Float64(vy)
+    has_vx = vx !== nothing
+    has_vy = vy !== nothing
+    push!(
+        vel_boxes_2D,
+        VelBox2D(
+            Float64(cenx),
+            Float64(cenz),
+            Float64(widthx),
+            Float64(widthz),
+            vx_val,
+            vy_val,
+            has_vx,
+            has_vy,
+        ),
+    )
+    return nothing
+end
+
+
 function GMG_subduction_2D(nx, ny)
     model_depth = 175.0 # km
     nx, nz = nx, ny
@@ -211,7 +254,14 @@ function GMG_subduction_2D(nx, ny)
         zlim=(-100, 0),
         phase=ConstantPhase(8)
     )
-
+    add_vel_box!(
+        cenx   = (3000 - 2430) * 1.0e3,  # m
+        cenz   = -40.0 * 1.0e3,          # m
+        widthx = 50.0 * 1.0e3,          # m
+        widthz = 20.0 * 1.0e3,           # m
+        vx     = 1e-9#1e-9#2.37e-9,                   # m/s (optional)
+    #    vy     = -4.0e-9,                    # m/s (optional)
+    )
 
     Grid2D = addfield(Grid2D, (; Phases, Temp))
     # write_paraview(Grid2D, "Initial_Setup_Subduction_rank")
