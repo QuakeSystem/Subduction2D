@@ -1,7 +1,6 @@
 using GeophysicalModelGenerator
 # GMG requires Celcius inputs, but JustRelax needs Kelvin. Observe conversion at the bottom of this script
 
-
 struct VelBox2D
     cenx::Float64
     cenz::Float64
@@ -42,7 +41,6 @@ function add_vel_box!(
     )
     return nothing
 end
-
 
 function GMG_subduction_2D(nx, ny)
     model_depth = 175.0 # km
@@ -255,11 +253,11 @@ function GMG_subduction_2D(nx, ny)
         phase=ConstantPhase(8)
     )
     add_vel_box!(
-        cenx   = (3000 - 2430) * 1.0e3,  # m
-        cenz   = -40.0 * 1.0e3,          # m
-        widthx = 50.0 * 1.0e3,          # m
-        widthz = 20.0 * 1.0e3,           # m
-        vx     = 1e-9#1e-9#2.37e-9,                   # m/s (optional)
+        cenx   = 180 * 1.0e3,  # m
+        cenz   = -54.8 * 1.0e3,          # m
+        widthx = 20 * 1.0e3,          # m
+        widthz = 23.6 * 1.0e3,           # m
+        vx     = 1.58e-9 #is 5 cm /yr                # m/s (optional)
     #    vy     = -4.0e-9,                    # m/s (optional)
     )
 

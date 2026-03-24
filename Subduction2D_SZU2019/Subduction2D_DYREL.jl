@@ -3,6 +3,7 @@
 # Here, the model is bundled with the _setup and _rheology file and
 # is being tuned to the van Dinther (2019) paper on Mega Thrusts.
 
+using Infiltrator
 
 let
     try
@@ -327,7 +328,6 @@ function make_figure(
 end
 
 
-
 @parallel_indices (i, j) function _apply_vel_box_Vx!(
     Vx,
     xvx,
@@ -415,7 +415,6 @@ end
     end
     return nothing
 end
-
 # Velocity boxes are applied on the same staggered grid as the Stokes solver:
 # - Vx lives at (x face, z) with size (ni[1]+1, ni[2]+2); grid_vx = (xvi[1], yVx).
 # - Vy lives at (x, z face) with size (ni[1]+2, ni[2]+1); grid_vy = (xVy, xvi[2]).
@@ -434,6 +433,10 @@ function apply_vel_boxes!(
     xvx, yvx = grid_vx
     xvy, yvy = grid_vy
 
+    # reset velocity-box masks: 0 ⇒ no box (free)
+    stokes.mask_vbox_x.mask .= 0
+    stokes.mask_vbox_y.mask .= 0
+
     for box in boxes
         halfx = box.widthx / 2
         halfz = box.widthz / 2
@@ -444,6 +447,15 @@ function apply_vel_boxes!(
             @parallel (@idx (nx, ny)) _apply_vel_box_Vx!(
                 Vx, xvx, yvx, box.cenx, box.cenz, halfx, halfz, box.vx
             )
+            @parallel (@idx (nx, ny)) _mark_vbox_mask_Vx!(
+                stokes.mask_vbox_x.mask,
+                xvx,
+                yvx,
+                box.cenx,
+                box.cenz,
+                halfx,
+                halfz,
+            )
         end
 
         if box.has_vy
@@ -451,6 +463,15 @@ function apply_vel_boxes!(
             ny = length(yvy)
             @parallel (@idx (nx, ny)) _apply_vel_box_Vy!(
                 Vy, xvy, yvy, box.cenx, box.cenz, halfx, halfz, box.vy
+            )
+            @parallel (@idx (nx, ny)) _mark_vbox_mask_Vy!(
+                stokes.mask_vbox_y.mask,
+                xvy,
+                yvy,
+                box.cenx,
+                box.cenz,
+                halfx,
+                halfz,
             )
         end
     end
@@ -473,7 +494,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
     dt = 0.05e3 * 3600 * 24 * 365
-    dt_max = 100e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt_max = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -488,7 +509,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
-
     # particle fields for the stress rotation
     pτ = StressParticles(particles)
     particle_args = (pT, pPhases, unwrap(pτ)...)
@@ -589,11 +609,12 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, xvi, xci, particles)
-
+        # @infiltrate
         # Stokes solver ----------------
         # Prescribe velocity boxes before solve so solver finds a solution consistent with them
         apply_vel_boxes!(stokes, grid, vel_boxes_2D)
         update_halo!(@velocity(stokes)...)
+        # @infiltrate
 
         # Stokes solver: re-apply velocity boxes after every V update so the solver
         # keeps the prescribed velocities in the box (otherwise each iteration overwrites them).
@@ -603,6 +624,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # else
         #     linear_viscosity = false
         # end
+        # @infiltrate
         linear_viscosity = false
         t_stokes = @elapsed begin
             out = solve_DYREL!(
@@ -621,7 +643,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     iterMax = 50.0e3,
                     rel_drop = 1.0e-2,
                     nout = 100,
-                    λ_relaxation = 1,
+                    # λ_relaxation = 1,
                     viscosity_relaxation = 2.0e-2,
                     viscosity_cutoff = viscosity_cutoff,
                     linear_viscosity = linear_viscosity,
@@ -636,13 +658,17 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
-
+        # @infiltrate
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
         # if it > 6
         dt_plot = dt
+        # if it < 10
+        #     dt = it * (0.05e3 * 3600 * 24 * 365)
+        # else
         dt = compute_dt(stokes, di, dt_max) #* 0.8
+        # end
         println("new dt: $(dt / (10e3 * 3600 * 24 * 365.25)) Kyr")
         # end
             # compute strain rate 2nd invartian - for plotting
@@ -793,7 +819,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.157"
+version = "v0.174"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
 n = 64

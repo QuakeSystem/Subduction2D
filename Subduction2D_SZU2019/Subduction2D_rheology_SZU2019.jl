@@ -14,6 +14,11 @@ function init_rheologies()
 
     # common physical properties
     α = 2.4e-5 # 1 / K
+    # lambda λ is Pf/Ps, 0.4 for any hydrostatic material, 0.6 for some and 0.95 for weak materials.
+    λ_hydrostatic = 0.4
+    λ_medium = 0.6
+    λ_weak = 0.95
+    
     # Cp = 750    # J / kg K
     # Define rheology struct
     return rheology = (
@@ -30,18 +35,17 @@ function init_rheologies()
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             # CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
-
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=6.7e10),
-                # DislocationCreep(;
-                # A=2.513e-17,
-                # E=5.32e5,
-                # V=8.0e-6,
-                # n=3.5,
-                # ),
+                DislocationCreep(;
+                A=2.513e-17,
+                E=5.32e5,
+                V=8.0e-6,
+                n=3.5,
+                ),
                 DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.6),
+                    ϕ=asind(0.6*(1-λ_hydrostatic)),
                     η_vp=0
                 )
             )),
@@ -71,20 +75,20 @@ function init_rheologies()
                 d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
-            # CompositeRheology=CompositeRheology((
-            #     ConstantElasticity(; G=6.7e10),
-            #     DislocationCreep(;
-            #     A=1.9960e-21,
-            #     E=4.7e5,
-            #     V=8.0e-6,
-            #     n=4,
-            #     ),
-            #     DruckerPrager_regularised(;
-            #         C=2e6,#1e7, # edit v0.101
-            #         ϕ=asind(0.100),
-            #         η_vp=0)
-            # )),
+            # CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
+            CompositeRheology=CompositeRheology((
+                ConstantElasticity(; G=6.7e10),
+                DislocationCreep(;
+                A=1.9960e-21,
+                E=4.7e5,
+                V=8.0e-6,
+                n=4,
+                ),
+                DruckerPrager_regularised(;
+                    C=2e6,#1e7, # edit v0.101
+                    ϕ=asind(0.100*(1-λ_medium)),
+                    η_vp=0)
+            )),
         ),
 
         # SZU material 7
@@ -101,20 +105,20 @@ function init_rheologies()
                 d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
-            # CompositeRheology=CompositeRheology((
-            #     ConstantElasticity(; G=2.5e10),
-            #     DislocationCreep(;
-            #     A=5.076142131979696e-18,
-            #     E=1.54e5,
-            #     V=8.0e-6,
-            #     n=2.3,
-            #     ),
-            #     DruckerPrager_regularised(;
-            #         C=6e6,
-            #         ϕ=asind(0.025), # edit v0.101
-            #         η_vp=0)
-            # )),
+            # CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
+            CompositeRheology=CompositeRheology((
+                ConstantElasticity(; G=2.5e10),
+                DislocationCreep(;
+                A=5.076142131979696e-18,
+                E=1.54e5,
+                V=8.0e-6,
+                n=2.3,
+                ),
+                DruckerPrager_regularised(;
+                    C=6e6,
+                    ϕ=asind(0.5*(1-λ_weak)), # Only value not exactly same as SZU2019, as mu there is 10 (??)
+                    η_vp=0)
+            )),
         ),
 
         # SZU material 8
@@ -130,20 +134,20 @@ function init_rheologies()
                 d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
-            # CompositeRheology=CompositeRheology((
-            #     ConstantElasticity(; G=2.5e10),
-            #     DislocationCreep(;
-            #     A=2.0833333333333332e-23,
-            #     E=2.38e5,
-            #     V=8.0e-6,
-            #     n=3.2,
-            #     ),
-            #     DruckerPrager_regularised(;
-            #         C=200e6,
-            #         ϕ=asind(0.85),
-            #         η_vp=0)
-            # )),
+            # CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
+            CompositeRheology=CompositeRheology((
+                ConstantElasticity(; G=2.5e10),
+                DislocationCreep(;
+                A=2.0833333333333332e-23,
+                E=2.38e5,
+                V=8.0e-6,
+                n=3.2,
+                ),
+                DruckerPrager_regularised(;
+                    C=200e6,
+                    ϕ=asind(0.85*(1-λ_weak)),
+                    η_vp=0)
+            )),
         ),
 
         # SZU material 5/6
@@ -159,20 +163,20 @@ function init_rheologies()
                 d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
-            # CompositeRheology=CompositeRheology((
-            #     ConstantElasticity(; G=2.5e10),
-            #     DislocationCreep(;
-            #     A=5.076142131979696e-18,
-            #     E=1.54e5,
-            #     V=12e-6,
-            #     n=2.3,
-            #     ),
-            #     DruckerPrager_regularised(;
-            #         C=200e8,
-            #         ϕ=asind(0.72),
-            #         η_vp=0)
-            # )),
+            # CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
+            CompositeRheology=CompositeRheology((
+                ConstantElasticity(; G=2.5e10),
+                DislocationCreep(;
+                A=5.076142131979696e-18,
+                E=1.54e5,
+                V=12e-6,
+                n=2.3,
+                ),
+                DruckerPrager_regularised(;
+                    C=200e8,
+                    ϕ=asind(0.72*(1-λ_hydrostatic)),
+                    η_vp=0)
+            )),
         ),
 
         # SZU material 3
@@ -188,20 +192,20 @@ function init_rheologies()
                 d=4.00e-6 * 1e-5 * 1e-6,
             ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),            
-            # CompositeRheology=CompositeRheology((
-                # ConstantElasticity(; G=1.0e10),
-                # DislocationCreep(;
-                # A=5.076142131979696e-18,
-                # E=1.54e5,
-                # V=8e-6,
-                # n=2.3,
-                # ),
-            #     DruckerPrager_regularised(;
-            #         C=200e6,
-            #         ϕ=asind(0.35),
-            #         η_vp=0)
-            # )),
+            # CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
+            CompositeRheology=CompositeRheology((
+                ConstantElasticity(; G=1.0e10),
+                DislocationCreep(;
+                A=5.076142131979696e-18,
+                E=1.54e5,
+                V=8e-6,
+                n=2.3,
+                ),
+                DruckerPrager_regularised(;
+                    C=200e6,
+                    ϕ=asind(0.35*(1-λ_medium)),
+                    η_vp=0)
+            )),
             ),
         SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
             Phase=8,
