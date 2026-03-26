@@ -3,7 +3,6 @@
 # Here, the model is bundled with the _setup and _rheology file and
 # is being tuned to the van Dinther (2019) paper on Mega Thrusts.
 
-using Infiltrator
 
 let
     try
@@ -649,7 +648,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
-        println("   Time/iteration:  $(t_stokes / out.iter) s")
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
@@ -807,8 +805,8 @@ do_vtk = true # set to true to generate VTK files for ParaView
 version = "v0.181"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
-n = 32
-nx, ny = n * 10, 48
+n = 128
+nx, ny = n * 10, 192
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
