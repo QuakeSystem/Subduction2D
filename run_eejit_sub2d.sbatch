@@ -1,10 +1,9 @@
 #!/bin/sh
 #SBATCH --ntasks=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
 #SBATCH --threads-per-core=1
-#SBATCH --partition=allq
+#SBATCH --partition=defq
 #SBATCH --nodes=1
-#SBATCH --exclusive
 #SBATCH -o job.%N.%j.out  # STDOUT
 #SBATCH -e job.%N.%j.err  # STDERR
 #SBATCH --job-name sub2d_eejit
@@ -32,8 +31,8 @@
 
 module purge
 module load development
-# module load CUDA/12.5 # on gpu nodes
-module load dev2024 # on cpu nodes
+module load CUDA/12.5 # on gpu nodes
+# module load dev2024 # on cpu nodes
 
 
 export JULIA_SSL_NO_VERIFY_HOSTS="*"

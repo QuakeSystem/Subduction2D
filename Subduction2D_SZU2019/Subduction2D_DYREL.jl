@@ -20,7 +20,7 @@ using JustRelax
 
 using GeoParams, CairoMakie
 
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -609,22 +609,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, xvi, xci, particles)
-        # @infiltrate
         # Stokes solver ----------------
         # Prescribe velocity boxes before solve so solver finds a solution consistent with them
         apply_vel_boxes!(stokes, grid, vel_boxes_2D)
         update_halo!(@velocity(stokes)...)
-        # @infiltrate
 
         # Stokes solver: re-apply velocity boxes after every V update so the solver
         # keeps the prescribed velocities in the box (otherwise each iteration overwrites them).
         args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-        # if it < 6
-        #     linear_viscosity = true
-        # else
-        #     linear_viscosity = false
-        # end
-        # @infiltrate
         linear_viscosity = false
         t_stokes = @elapsed begin
             out = solve_DYREL!(
@@ -642,7 +634,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     verbose = true,
                     iterMax = 50.0e3,
                     rel_drop = 1.0e-2,
-                    nout = 100,
+                    nout = 400,
                     # λ_relaxation = 1,
                     viscosity_relaxation = 2.0e-2,
                     viscosity_cutoff = viscosity_cutoff,
@@ -657,21 +649,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
-        # println("   Time/iteration:  $(t_stokes / out.iter) s")
-        # @infiltrate
+        println("   Time/iteration:  $(t_stokes / out.iter) s")
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
-        # if it > 6
         dt_plot = dt
-        # if it < 10
-        #     dt = it * (0.05e3 * 3600 * 24 * 365)
-        # else
         dt = compute_dt(stokes, di, dt_max) #* 0.8
-        # end
-        println("new dt: $(dt / (10e3 * 3600 * 24 * 365.25)) Kyr")
-        # end
-            # compute strain rate 2nd invartian - for plotting
+        println("new dt: $(dt / (1e3 * 3600 * 24 * 365.25)) Kyr")
+        # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
@@ -727,90 +712,90 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         t += dt
 
         # Data I/O and plotting ---------------------
-        # if it == 1 || rem(it, 5) == 0
-        checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
-        checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
-        (; η_vep, η) = stokes.viscosity
-        if do_vtk
-            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-            data_v = (;
-                T = Array(T_buffer),
-                τII = Array(stokes.τ.II),
-                εII = Array(stokes.ε.II),
-                Vx = Array(Vx_v),
-                Vy = Array(Vy_v),
+        if it == 1 || rem(it, 5) == 0
+            # checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
+            # checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+            (; η_vep, η) = stokes.viscosity
+            if do_vtk
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                data_v = (;
+                    T = Array(T_buffer),
+                    τII = Array(stokes.τ.II),
+                    εII = Array(stokes.ε.II),
+                    Vx = Array(Vx_v),
+                    Vy = Array(Vy_v),
+                )
+                data_c = (;
+                    P = Array(stokes.P),
+                    η = Array(η_vep),
+                )
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
+                )
+                save_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi,
+                    xci,
+                    data_v,
+                    data_c,
+                    velocity_v;
+                    t = t
+                )
+            end
+
+            # Make particles plottable
+            p = particles.coords
+            ppx, ppy = p
+            pxv = Array(ppx.data[:] ./ 1.0e3)
+            pyv = Array(ppy.data[:] ./ 1.0e3)
+            clr = Array(pPhases.data[:])
+            # clr      = pT.data[:]
+            idxv = Array(particles.index.data[:])
+
+            # --- New figure: velocity with limited range ---
+            vmin = -0.1 / (365.25 * 24 * 3600)     # -10 cm/yr
+            vmax = +0.1 / (365.25 * 24 * 3600)     # +10 cm/yr
+            Vx_raw = Array(stokes.V.Vx[2:(end - 1), :])
+            Vx_limited = clamp.(Vx_raw, vmin, vmax)
+            Vy_raw = Array(stokes.V.Vy[2:(end - 1), :])
+            Vy_limited = clamp.(Vy_raw, vmin, vmax)
+
+
+            # --- ZOOM REGION ---
+            xmin_zoom, xmax_zoom = 800, 1100
+            zmin_zoom, zmax_zoom = -80, 0
+
+            # --- FULL DOMAIN ---
+            xmin_full = minimum(xvi[1]) * 1.0e-3
+            xmax_full = maximum(xvi[1]) * 1.0e-3
+            zmin_full = minimum(xvi[2]) * 1.0e-3
+            zmax_full = maximum(xvi[2]) * 1.0e-3
+
+            # ZOOMED FIGURE
+            make_figure(
+                it, t, dt_plot,
+                xvi, xci,
+                T_buffer, ρg,
+                stokes,
+                Vx_limited, Vy_limited,
+                pxv, pyv, clr, idxv,
+                xmin_zoom, xmax_zoom, zmin_zoom, zmax_zoom,
+                joinpath(figdir, "zoom_$(lpad(it, 2, "0")).png"), version=version
             )
-            data_c = (;
-                P = Array(stokes.P),
-                η = Array(η_vep),
+
+            # FULL DOMAIN FIGURE
+            make_figure(
+                it, t, dt_plot,
+                xvi, xci,
+                T_buffer, ρg,
+                stokes,
+                Vx_limited, Vy_limited,
+                pxv, pyv, clr, idxv,
+                xmin_full, xmax_full, zmin_full, zmax_full,
+                joinpath(figdir, "full_$(lpad(it, 2, "0")).png"); version=version
             )
-            velocity_v = (
-                Array(Vx_v),
-                Array(Vy_v),
-            )
-            save_vtk(
-                joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
-                xvi,
-                xci,
-                data_v,
-                data_c,
-                velocity_v;
-                t = t
-            )
-        end
-
-        # Make particles plottable
-        p = particles.coords
-        ppx, ppy = p
-        pxv = ppx.data[:] ./ 1.0e3
-        pyv = ppy.data[:] ./ 1.0e3
-        clr = pPhases.data[:]
-        # clr      = pT.data[:]
-        idxv = particles.index.data[:]
-
-        # --- New figure: velocity with limited range ---
-        vmin = -0.1 / (365.25 * 24 * 3600)     # -10 cm/yr
-        vmax = +0.1 / (365.25 * 24 * 3600)     # +10 cm/yr
-        Vx_raw = Array(stokes.V.Vx[2:(end - 1), :])
-        Vx_limited = clamp.(Vx_raw, vmin, vmax)
-        Vy_raw = Array(stokes.V.Vy[2:(end - 1), :])
-        Vy_limited = clamp.(Vy_raw, vmin, vmax)
-
-
-        # --- ZOOM REGION ---
-        xmin_zoom, xmax_zoom = 800, 1100
-        zmin_zoom, zmax_zoom = -80, 0
-
-        # --- FULL DOMAIN ---
-        xmin_full = minimum(xvi[1]) * 1.0e-3
-        xmax_full = maximum(xvi[1]) * 1.0e-3
-        zmin_full = minimum(xvi[2]) * 1.0e-3
-        zmax_full = maximum(xvi[2]) * 1.0e-3
-
-        # ZOOMED FIGURE
-        make_figure(
-            it, t, dt_plot,
-            xvi, xci,
-            T_buffer, ρg,
-            stokes,
-            Vx_limited, Vy_limited,
-            pxv, pyv, clr, idxv,
-            xmin_zoom, xmax_zoom, zmin_zoom, zmax_zoom,
-            joinpath(figdir, "zoom_$(lpad(it, 2, "0")).png"), version=version
-        )
-
-        # FULL DOMAIN FIGURE
-        make_figure(
-            it, t, dt_plot,
-            xvi, xci,
-            T_buffer, ρg,
-            stokes,
-            Vx_limited, Vy_limited,
-            pxv, pyv, clr, idxv,
-            xmin_full, xmax_full, zmin_full, zmax_full,
-            joinpath(figdir, "full_$(lpad(it, 2, "0")).png"); version=version
-        )
-    # end
+    end
 
         # ------------------------------
     end 
@@ -819,12 +804,12 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.174"
+version = "v0.181"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
-n = 64
-# nx, ny = n * 10, 96
-nx, ny = n * 5, 48
+n = 32
+nx, ny = n * 10, 48
+
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
