@@ -1,10 +1,11 @@
 #!/bin/sh
 #SBATCH --ntasks=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gpus-per-task=1
 #SBATCH --threads-per-core=1
-#SBATCH --partition=allq
+#SBATCH --gres=gpu
+#SBATCH --partition=gpu
 #SBATCH --nodes=1
-#SBATCH --exclusive
 #SBATCH -o job.%N.%j.out  # STDOUT
 #SBATCH -e job.%N.%j.err  # STDERR
 #SBATCH --job-name sub2d_eejit
@@ -32,8 +33,8 @@
 
 module purge
 module load development
-# module load CUDA/12.5 # on gpu nodes
-module load dev2024 # on cpu nodes
+module load CUDA/12.5 # on gpu nodes
+# module load dev2024 # on cpu nodes
 
 
 export JULIA_SSL_NO_VERIFY_HOSTS="*"
@@ -55,5 +56,5 @@ echo "Running on hosts: $SLURM_NODELIST"
 echo "Current working directory is `pwd`"
 
 echo "  submitting the first job: `date` "
-julia --project ./Subduction2D_SZU2019/Subduction2D_SZU2019.jl
+julia --project ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
 echo "  first job finished: `date` "
