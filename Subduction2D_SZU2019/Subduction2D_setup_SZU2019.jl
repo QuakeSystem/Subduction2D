@@ -3,9 +3,9 @@ using GeophysicalModelGenerator
 
 struct VelBox2D
     cenx::Float64
-    cenz::Float64
+    ceny::Float64
     widthx::Float64
-    widthz::Float64
+    widthy::Float64
     vx::Float64
     vy::Float64
     has_vx::Bool
@@ -16,9 +16,9 @@ const vel_boxes_2D = VelBox2D[]
 
 function add_vel_box!(
     ; cenx,
-      cenz,
+      ceny,
       widthx,
-      widthz,
+      widthy,
       vx = nothing,
       vy = nothing,
 )
@@ -30,9 +30,9 @@ function add_vel_box!(
         vel_boxes_2D,
         VelBox2D(
             Float64(cenx),
-            Float64(cenz),
+            Float64(ceny),
             Float64(widthx),
-            Float64(widthz),
+            Float64(widthy),
             vx_val,
             vy_val,
             has_vx,
@@ -254,9 +254,9 @@ function GMG_subduction_2D(nx, ny)
     )
     add_vel_box!(
         cenx   = 180 * 1.0e3,  # m
-        cenz   = -54.8 * 1.0e3,          # m
+        ceny   = -54.8 * 1.0e3,          # m
         widthx = 20 * 1.0e3,          # m
-        widthz = 23.6 * 1.0e3,           # m
+        widthy = 23.6 * 1.0e3,           # m
         vx     = 5 * 0.01 / (3600*24*365)             # m/s (optional)
     #    vy     = -4.0e-9,                    # m/s (optional)
     )

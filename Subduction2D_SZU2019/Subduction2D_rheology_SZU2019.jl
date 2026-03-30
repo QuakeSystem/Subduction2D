@@ -36,7 +36,8 @@ function init_rheologies()
             # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((
-                ConstantElasticity(; G=6.7e10),
+                # ConstantElasticity(; G=6.7e10),
+                ConstantElasticity(; G=6.7e10), # Test v0.201
                 DislocationCreep(;
                 A=2.513e-17,
                 E=5.32e5,
@@ -45,7 +46,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.6*(1-λ_hydrostatic)),
+                    ϕ=atand(0.6*(1-λ_hydrostatic)),
                     η_vp=0
                 )
             )),
@@ -56,10 +57,10 @@ function init_rheologies()
         SetMaterialParams(;
             Name="Air",
             Phase=2,
-            Density=ConstantDensity(; ρ=1.00E+02), # water density
+            Density=ConstantDensity(; ρ=1.00),
             HeatCapacity=ConstantHeatCapacity(; Cp=3.33e6),
             Conductivity=ConstantConductivity(; k=1.0),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),)),
         ),
 
         # SZU material 12
@@ -85,8 +86,8 @@ function init_rheologies()
                 n=4,
                 ),
                 DruckerPrager_regularised(;
-                    C=2e6,#1e7, # edit v0.101
-                    ϕ=asind(0.100*(1-λ_medium)),
+                    C=1e7, # edit v0.101
+                    ϕ=atand(0.100*(1-λ_medium)),
                     η_vp=0)
             )),
         ),
@@ -116,7 +117,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=6e6,
-                    ϕ=asind(0.5*(1-λ_weak)), # Only value not exactly same as SZU2019, as mu there is 10 (??)
+                    ϕ=atand(0.5*(1-λ_weak)), # Only value not exactly same as SZU2019, as mu there is 10 (??)
                     η_vp=0)
             )),
         ),
@@ -144,8 +145,8 @@ function init_rheologies()
                 n=3.2,
                 ),
                 DruckerPrager_regularised(;
-                    C=200e6,
-                    ϕ=asind(0.85*(1-λ_weak)),
+                    C=1e7,
+                    ϕ=atand(0.85*(1-λ_weak)),
                     η_vp=0)
             )),
         ),
@@ -173,8 +174,8 @@ function init_rheologies()
                 n=2.3,
                 ),
                 DruckerPrager_regularised(;
-                    C=200e8,
-                    ϕ=asind(0.72*(1-λ_hydrostatic)),
+                    C=1e7,
+                    ϕ=atand(0.72*(1-λ_hydrostatic)),
                     η_vp=0)
             )),
         ),
@@ -202,8 +203,8 @@ function init_rheologies()
                 n=2.3,
                 ),
                 DruckerPrager_regularised(;
-                    C=200e6,
-                    ϕ=asind(0.35*(1-λ_medium)),
+                    C=1e7,
+                    ϕ=atand(0.35*(1-λ_medium)),
                     η_vp=0)
             )),
             ),

@@ -17,7 +17,7 @@ end
 using JustRelax
 using GeoParams, CairoMakie
 
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA
@@ -83,7 +83,7 @@ function make_figure(
         stokes,
         Vx_limited, Vy_limited,
         pxv, pyv, clr, idxv,
-        xmin, xmax, zmin, zmax,
+        xmin, xmax, ymin, ymax,
         figpath; version = nothing
     )
 
@@ -95,6 +95,12 @@ function make_figure(
     xv = xvi[1][2:end-1] .* 1e-3
     yv = xvi[2] .* 1e-3
     Tv = Array(T_buffer[2:end-1, :])
+
+    xi_mask = xmin .≤ xv .≤ xmax
+    yi_mask = ymin .≤ yv .≤ ymax
+    xv_zoom = xv[xi_mask]
+    yv_zoom = yv[yi_mask]
+    Tv_zoom = Tv[xi_mask, yi_mask]
 
     # Cell-centered grid (for density, stress, viscosity)
     xc = xci[1] .* 1e-3
@@ -125,7 +131,7 @@ function make_figure(
 
     Label(
         fig[0, 1],
-        "Subduction2D - SZU2019 | version: $version | t = $t_Myr_round Myr | dt = $t_Kyr Kyr",
+        "Subduction2D - SZU2019 | version: $version | t = $t_Myr_round Myr | dt = $t_Kyr Kyr | it = $it",
         fontsize = 28,
         halign = :center,
         tellwidth = false
@@ -145,7 +151,7 @@ function make_figure(
     # Apply zoom limits
     for ax in (ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9)
         xlims!(ax, xmin, xmax)
-        ylims!(ax, zmin, zmax)
+        ylims!(ax, ymin, ymax)
     end
 
     # ---- Plots ----
@@ -154,9 +160,9 @@ function make_figure(
 
     contour!(
         ax1,
-        xv,
-        yv,
-        Tv;
+        xv_zoom,
+        yv_zoom,
+        Tv_zoom;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -175,9 +181,9 @@ function make_figure(
 
     contour!(
         ax2,
-        xv,
-        yv,
-        Tv;
+        xv_zoom,
+        yv_zoom,
+        Tv_zoom;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -211,8 +217,8 @@ function make_figure(
     # Velocity x-direction
     h4 = heatmap!(
         ax4,
-        xv,
-        yv,
+        xv_zoom,
+        yv_zoom,
         Vx_limited;
         colormap = :vik,
         colorrange = (vmin, vmax)
@@ -249,9 +255,9 @@ function make_figure(
 
     contour!(
         ax7,
-        xv,
-        yv,
-        Tv;
+        xv_zoom,
+        yv_zoom,
+        Tv_zoom;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -270,9 +276,9 @@ function make_figure(
     )
     contour!(
         ax8,
-        xv,
-        yv,
-        Tv;
+        xv_zoom,
+        yv_zoom,
+        Tv_zoom;
         levels = isotherms_K,
         labels=true,
         labelsize = 12,
@@ -330,15 +336,15 @@ end
     xvx,
     yvx,
     cenx,
-    cenz,
+    ceny,
     halfx,
-    halfz,
+    halfy,
     vx_val,
 )
     if i ≤ size(Vx, 1) && j ≤ size(Vx, 2)
         x = xvx[i]
-        z = yvx[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
+        y = yvx[j]
+        if abs(x - cenx) ≤ halfx && abs(y - ceny) ≤ halfy
             @inbounds Vx[i, j] = vx_val
         end
     end
@@ -350,15 +356,15 @@ end
     xvy,
     yvy,
     cenx,
-    cenz,
+    ceny,
     halfx,
-    halfz,
+    halfy,
     vy_val,
 )
     if i ≤ size(Vy, 1) && j ≤ size(Vy, 2)
         x = xvy[i]
-        z = yvy[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
+        y = yvy[j]
+        if abs(x - cenx) ≤ halfx && abs(y - ceny) ≤ halfy
             @inbounds Vy[i, j] = vy_val
         end
     end
@@ -370,9 +376,9 @@ end
     xvx,
     yvx,
     cenx,
-    cenz,
+    ceny,
     halfx,
-    halfz,
+    halfy,
 )
     if i ≤ size(mask_vbox_x, 1) && j ≤ size(mask_vbox_x, 2)
         # mask indices (i,j) correspond to velocity DoFs at (i+1,j+1)
@@ -380,8 +386,8 @@ end
         jj = j + 1
         if ii ≤ length(xvx) && jj ≤ length(yvx)
             x = xvx[ii]
-            z = yvx[jj]
-            if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
+            y = yvx[jj]
+            if abs(x - cenx) ≤ halfx && abs(y - ceny) ≤ halfy
                 @inbounds mask_vbox_x[i, j] = 1
             end
         end
@@ -394,9 +400,9 @@ end
     xvy,
     yvy,
     cenx,
-    cenz,
+    ceny,
     halfx,
-    halfz,
+    halfy,
 )
     if i ≤ size(mask_vbox_y, 1) && j ≤ size(mask_vbox_y, 2)
         # mask indices (i,j) correspond to velocity DoFs at (i+1,j+1)
@@ -404,8 +410,8 @@ end
         jj = j + 1
         if ii ≤ length(xvy) && jj ≤ length(yvy)
             x = xvy[ii]
-            z = yvy[jj]
-            if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
+            y = yvy[jj]
+            if abs(x - cenx) ≤ halfx && abs(y - ceny) ≤ halfy
                 @inbounds mask_vbox_y[i, j] = 1
             end
         end
@@ -436,22 +442,22 @@ function apply_vel_boxes!(
 
     for box in boxes
         halfx = box.widthx / 2
-        halfz = box.widthz / 2
+        halfy = box.widthy / 2
 
         if box.has_vx
             nx = length(xvx)
             ny = length(yvx)
             @parallel (@idx (nx, ny)) _apply_vel_box_Vx!(
-                Vx, xvx, yvx, box.cenx, box.cenz, halfx, halfz, box.vx
+                Vx, xvx, yvx, box.cenx, box.ceny, halfx, halfy, box.vx
             )
             @parallel (@idx (nx, ny)) _mark_vbox_mask_Vx!(
                 stokes.mask_vbox_x.mask,
                 xvx,
                 yvx,
                 box.cenx,
-                box.cenz,
+                box.ceny,
                 halfx,
-                halfz,
+                halfy,
             )
         end
 
@@ -459,16 +465,16 @@ function apply_vel_boxes!(
             nx = length(xvy)
             ny = length(yvy)
             @parallel (@idx (nx, ny)) _apply_vel_box_Vy!(
-                Vy, xvy, yvy, box.cenx, box.cenz, halfx, halfz, box.vy
+                Vy, xvy, yvy, box.cenx, box.ceny, halfx, halfy, box.vy
             )
             @parallel (@idx (nx, ny)) _mark_vbox_mask_Vy!(
                 stokes.mask_vbox_y.mask,
                 xvy,
                 yvy,
                 box.cenx,
-                box.cenz,
+                box.ceny,
                 halfx,
-                halfz,
+                halfy,
             )
         end
     end
@@ -782,25 +788,13 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
             # --- ZOOM REGION ---
             xmin_zoom, xmax_zoom = 800, 1100
-            zmin_zoom, zmax_zoom = -80, 0
+            ymin_zoom, ymax_zoom = -80, 0
 
             # --- FULL DOMAIN ---
             xmin_full = minimum(xvi[1]) * 1.0e-3
             xmax_full = maximum(xvi[1]) * 1.0e-3
-            zmin_full = minimum(xvi[2]) * 1.0e-3
-            zmax_full = maximum(xvi[2]) * 1.0e-3
-
-            # ZOOMED FIGURE
-            make_figure(
-                it, t, dt_plot,
-                xvi, xci,
-                T_buffer, ρg,
-                stokes,
-                Vx_limited, Vy_limited,
-                pxv, pyv, clr, idxv,
-                xmin_zoom, xmax_zoom, zmin_zoom, zmax_zoom,
-                joinpath(figdir, "zoom_$(lpad(it, 2, "0")).png"), version=version
-            )
+            ymin_full = minimum(xvi[2]) * 1.0e-3
+            ymax_full = maximum(xvi[2]) * 1.0e-3
 
             # FULL DOMAIN FIGURE
             make_figure(
@@ -810,9 +804,30 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 stokes,
                 Vx_limited, Vy_limited,
                 pxv, pyv, clr, idxv,
-                xmin_full, xmax_full, zmin_full, zmax_full,
-                joinpath(figdir, "full_$(lpad(it, 2, "0")).png"); version=version
+                xmin_full, xmax_full, ymin_full, ymax_full,
+                joinpath(figdir, "full_$(lpad(it, 2, "0")).png"), version=version
             )
+
+            # ZOOMED FIGURE
+            make_figure(
+                it, t, dt_plot,
+                xvi, xci,
+                T_buffer, ρg,
+                stokes,
+                Vx_limited, Vy_limited,
+                pxv, pyv, clr, idxv,
+                xmin_zoom, xmax_zoom, ymin_zoom, ymax_zoom,
+                joinpath(figdir, "zoom_$(lpad(it, 2, "0")).png"), version=version
+            )
+
+
+            # --- FULL DOMAIN ---
+            xmin_full = minimum(xvi[1]) * 1.0e-3
+            xmax_full = maximum(xvi[1]) * 1.0e-3
+            ymin_full = minimum(xvi[2]) * 1.0e-3
+            ymax_full = maximum(xvi[2]) * 1.0e-3
+
+
     end
 
         # ------------------------------
@@ -822,11 +837,13 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.199"
+version = "v0.203"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
-n = 128
-nx, ny = n * 13, 192
+# n = 128
+# nx, ny = n * 13, 192
+n = 32
+nx, ny = n * 10, round(Int, n * 1.5)
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
