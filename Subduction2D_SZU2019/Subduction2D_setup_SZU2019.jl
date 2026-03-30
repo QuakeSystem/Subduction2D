@@ -46,10 +46,10 @@ function GMG_subduction_2D(nx, ny)
     model_depth = 175.0 # km
     nx, nz = nx, ny
     Tbot = 1718 - 273.15 # K, 1445 C, from Katsura 2022
-    xmin = 0 # km, left edge of model
+    xmin = -300 # km, left edge of model
     xmax = 1500 # km, right edge of model
     extra_air_thickness = 0 # km, can be increased
-    x = range(0, xmax, nx)
+    x = range(-300, xmax, nx)
     z = range(-model_depth, extra_air_thickness, nz)
     Grid2D = CartData(xyz_grid(x, 0, z))
     Phases = zeros(Int64, nx, 1, nz)
@@ -86,8 +86,8 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim=(854, 940, 1035, 1100, xmax, xmax, 954),
-        zlim=(-12.5, -35, -80, -112.5, -112.5, -8, -8),
+        xlim=(954, 854, 940, 1035, 1100, xmax, xmax),
+        zlim=(-8, -12.5, -35, -80, -112.5, -112.5, -8),
         T=LinearTemp(Ttop=0, Tbot=Tlab)
     )
 
@@ -248,7 +248,7 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim=(0,4),
+        xlim=(xmin,xmin+4),
         zlim=(-100, 0),
         phase=ConstantPhase(8)
     )
@@ -257,7 +257,7 @@ function GMG_subduction_2D(nx, ny)
         cenz   = -54.8 * 1.0e3,          # m
         widthx = 20 * 1.0e3,          # m
         widthz = 23.6 * 1.0e3,           # m
-        vx     = 1.58e-9 #is 5 cm /yr                # m/s (optional)
+        vx     = 5 * 0.01 / (3600*24*365)             # m/s (optional)
     #    vy     = -4.0e-9,                    # m/s (optional)
     )
 

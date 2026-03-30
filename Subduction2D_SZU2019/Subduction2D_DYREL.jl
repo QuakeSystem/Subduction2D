@@ -3,7 +3,6 @@
 # Here, the model is bundled with the _setup and _rheology file and
 # is being tuned to the van Dinther (2019) paper on Mega Thrusts.
 
-
 let
     try
         import Pkg
@@ -16,7 +15,6 @@ let
     end
 end
 using JustRelax
-
 using GeoParams, CairoMakie
 
 const isCUDA = true
@@ -90,7 +88,7 @@ function make_figure(
     )
 
     # Add isotherms
-    isotherms_C = [100, 150, 350, 450, 900, 1300]
+    isotherms_C = [0, 50, 100, 150, 350, 450, 900, 1300]
     isotherms_K = isotherms_C .+ 273
     
     # Vertex grid (for T, V, etc.)
@@ -526,16 +524,38 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    Ttop = 20 + 273
+    Ttop = -10 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
     @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
+    # Build Dirichlet mask for top slab (y between -6km and 0)
+    # Ω_T = @zeros(size(thermal.T)...)
+
+    # # xvi[2] are the vertical vertex coordinates (in meters)
+    # y_top    =  0.0        # surface
+    # y_bottom = -3e3        # 6 km depth
+
+    # # Fill mask on CPU, then move to device
+    # Ω_T_cpu = zeros(size(thermal.T)...)
+    # for j in axes(Ω_T_cpu, 2)
+    #     # j=1 and j=end are ghost nodes; interior vertices start at j=1
+    #     # xvi[2] has length ny+1, mapping to columns 1:(ny+1) of thermal.T
+    #     ycoord = j <= length(xvi[2]) ? xvi[2][j] : NaN
+    #     if y_bottom ≤ ycoord ≤ y_top
+    #         Ω_T_cpu[:, j] .= 1.0
+    #     end
+    # end
+    # Ω_T .= PTArray(backend)(Ω_T_cpu)
+
     thermal_bc = TemperatureBoundaryConditions(;
-        no_flux = (left = true, right = true, top = false, bot = false),
+        no_flux  = (left = true, right = true, top = false, bot = false),
+        # dirichlet = (; constant = Ttop, mask = Ω_T),   # Ttop = 273 + 20
     )
+
     thermal_bcs!(thermal, thermal_bc)
     @views thermal.T[:, end] .= Ttop
     @views thermal.T[:, 1] .= Tbot
+    # @infiltrate
     temperature2center!(thermal)
     # ----------------------------------------------------
 
@@ -802,11 +822,11 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.181"
+version = "v0.199"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
 n = 128
-nx, ny = n * 10, 192
+nx, ny = n * 13, 192
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

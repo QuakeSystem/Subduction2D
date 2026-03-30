@@ -57,7 +57,7 @@ function init_rheologies()
             Name="Air",
             Phase=2,
             Density=ConstantDensity(; ρ=1.00E+02), # water density
-            HeatCapacity=ConstantHeatCapacity(; Cp=3.0e3),
+            HeatCapacity=ConstantHeatCapacity(; Cp=3.33e6),
             Conductivity=ConstantConductivity(; k=1.0),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
         ),
