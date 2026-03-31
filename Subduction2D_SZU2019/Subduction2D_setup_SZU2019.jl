@@ -257,7 +257,7 @@ function GMG_subduction_2D(nx, ny)
         ceny   = -54.8 * 1.0e3,          # m
         widthx = 20 * 1.0e3,          # m
         widthy = 23.6 * 1.0e3,           # m
-        vx     = 5 * 0.01 / (3600*24*365)             # m/s (optional)
+        vx     = 7.5 * 0.01 / (3600*24*365)             # m/s (optional)
     #    vy     = -4.0e-9,                    # m/s (optional)
     )
 

@@ -572,7 +572,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (5.0e19, 5.0e23)
+    viscosity_cutoff = (5.0e18, 5.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     # ----------------------------------------------------
@@ -736,7 +736,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || it == 2 || rem(it, 5) == 0
             # checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
             # checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
@@ -837,13 +837,13 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.203"
+version = "v0.205"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
-# n = 128
-# nx, ny = n * 13, 192
-n = 32
-nx, ny = n * 10, round(Int, n * 1.5)
+n = 128
+nx, ny = n * 13, 192
+# n = 32
+# nx, ny = n * 10, round(Int, n * 1.5)
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
