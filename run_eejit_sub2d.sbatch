@@ -1,9 +1,9 @@
 #!/bin/sh
-#SBATCH --ntasks=1
+#SBATCH --ntasks=2
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-task=1
 #SBATCH --threads-per-core=1
-#SBATCH --gres=gpu
+##### SBATCH --gres=gpu
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH -o job.%N.%j.out  # STDOUT
@@ -33,9 +33,9 @@
 
 module purge
 module load development
+module load dev2024
+export PATH="/scratch/tectonics/bert/julia_local/JuliaUp/bin:$PATH"
 module load CUDA/12.5 # on gpu nodes
-# module load dev2024 # on cpu nodes
-
 
 export JULIA_SSL_NO_VERIFY_HOSTS="*"
 export OPENSSL_DIR=""
@@ -56,5 +56,6 @@ echo "Running on hosts: $SLURM_NODELIST"
 echo "Current working directory is `pwd`"
 
 echo "  submitting the first job: `date` "
-julia --project ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
+# julia --project ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
+/scratch/tectonics/GPU4GEO/julia_local/julia_depot/bin/mpiexecjl -n 2 julia --project=. ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
 echo "  first job finished: `date` "

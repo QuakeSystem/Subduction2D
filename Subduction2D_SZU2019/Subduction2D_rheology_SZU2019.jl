@@ -17,7 +17,7 @@ function init_rheologies()
     # lambda λ is Pf/Ps, 0.4 for any hydrostatic material, 0.6 for some and 0.95 for weak materials.
     λ_hydrostatic = 0.4
     λ_medium = 0.6
-    λ_weak = 0.95
+    λ_weak = 0.999
     
     # Cp = 750    # J / kg K
     # Define rheology struct
@@ -85,8 +85,8 @@ function init_rheologies()
                 n=4,
                 ),
                 DruckerPrager_regularised(;
-                    C=1e7, # edit v0.101
-                    ϕ=asind(0.100*(1-λ_medium)),
+                    C=1e6, # edit v0.101
+                    ϕ=asind(0.100*(1-λ_weak)),
                     η_vp=0)
             )),
         ),
@@ -115,7 +115,7 @@ function init_rheologies()
                 n=2.3,
                 ),
                 DruckerPrager_regularised(;
-                    C=6e6,
+                    C=1e6,
                     ϕ=asind(0.5*(1-λ_weak)), # Only value not exactly same as SZU2019, as mu there is 10 (??)
                     η_vp=0)
             )),

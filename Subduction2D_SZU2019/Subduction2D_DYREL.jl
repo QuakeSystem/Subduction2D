@@ -88,7 +88,7 @@ function make_figure(
     )
 
     # Add isotherms
-    isotherms_C = [0, 50, 100, 150, 350, 450, 900, 1300]
+    isotherms_C = [10, 50, 100, 150, 350, 450, 900, 1300]
     isotherms_K = isotherms_C .+ 273
     
     # Vertex grid (for T, V, etc.)
@@ -176,7 +176,7 @@ function make_figure(
         xc,
         yc,
         Array(T_buffer[2:(end - 1), :]),
-        colorrange = (253, 1718)
+        colorrange = (253, 1718),
         colormap = :vik
     )
 
@@ -846,17 +846,17 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.213"
+version = "v0.21xxx2_lowres"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
-n = 128
-nx, ny = n * 10, 192
-# n = 32
-# nx, ny = n * 10, round(Int, n * 1.5)
+# n = 128
+# nx, ny = n * 10, 192
+n = 32
+nx, ny = n * 10, round(Int, n * 1.5)
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true, dims = (2, 1, 1))...)
 else
     igg
 end
