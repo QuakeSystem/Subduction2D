@@ -46,10 +46,10 @@ function GMG_subduction_2D(nx, ny)
     model_depth = 175.0 # km
     nx, nz = nx, ny
     Tbot = 1718 - 273.15 # K, 1445 C, from Katsura 2022
-    xmin = -300 # km, left edge of model
+    xmin = 0 # km, left edge of model
     xmax = 1500 # km, right edge of model
     extra_air_thickness = 0 # km, can be increased
-    x = range(-300, xmax, nx)
+    x = range(xmin, xmax, nx)
     z = range(-model_depth, extra_air_thickness, nz)
     Grid2D = CartData(xyz_grid(x, 0, z))
     Phases = zeros(Int64, nx, 1, nz)
@@ -157,8 +157,8 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim=(xmin, xmin, 916, 902),
-        zlim=(-12.5, -19.5, -19.5, -12.5),
+        xlim=(xmin, xmin, 906, 902),
+        zlim=(-12.5, -14.5, -14.5, -12.5),
         phase=ConstantPhase(4),# 5)#Making phases contiguous (28 jan, v0.76)
     )
 

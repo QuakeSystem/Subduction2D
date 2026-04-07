@@ -17,7 +17,7 @@ end
 using JustRelax
 using GeoParams, CairoMakie
 
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -176,6 +176,7 @@ function make_figure(
         xc,
         yc,
         Array(T_buffer[2:(end - 1), :]),
+        colorrange = (253, 1718)
         colormap = :vik
     )
 
@@ -217,8 +218,8 @@ function make_figure(
     # Velocity x-direction
     h4 = heatmap!(
         ax4,
-        xv_zoom,
-        yv_zoom,
+        xv,
+        yv,
         Vx_limited;
         colormap = :vik,
         colorrange = (vmin, vmax)
@@ -742,6 +743,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                Rx_c = zeros(size(stokes.P))
+                Ry_c = zeros(size(stokes.P))
+                @views Rx_c[axes(stokes.R.Rx, 1), axes(stokes.R.Rx, 2)] .= Array(stokes.R.Rx)
+                @views Ry_c[axes(stokes.R.Ry, 1), axes(stokes.R.Ry, 2)] .= Array(stokes.R.Ry)
+
                 data_v = (;
                     T = Array(T_buffer),
                     τII = Array(stokes.τ.II),
@@ -750,8 +756,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     Vy = Array(Vy_v),
                 )
                 data_c = (;
-                    P = Array(stokes.P),
-                    η = Array(η_vep),
+                    P   = Array(stokes.P),
+                    η   = Array(η_vep),
+                    Rx  = Array(Rx_c),
+                    Ry  = Array(Ry_c),
+                    Rmag = sqrt.(Rx_c .^ 2 .+ Ry_c .^ 2),
                 )
                 velocity_v = (
                     Array(Vx_v),
@@ -837,11 +846,11 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.205"
+version = "v0.213"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
 n = 128
-nx, ny = n * 13, 192
+nx, ny = n * 10, 192
 # n = 32
 # nx, ny = n * 10, round(Int, n * 1.5)
 

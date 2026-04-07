@@ -36,8 +36,7 @@ function init_rheologies()
             # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((
-                # ConstantElasticity(; G=6.7e10),
-                ConstantElasticity(; G=6.7e10), # Test v0.201
+                ConstantElasticity(; G=6.7e10),
                 DislocationCreep(;
                 A=2.513e-17,
                 E=5.32e5,
