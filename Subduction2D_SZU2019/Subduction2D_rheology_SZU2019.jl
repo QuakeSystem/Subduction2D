@@ -17,8 +17,8 @@ function init_rheologies()
     # lambda λ is Pf/Ps, 0.4 for any hydrostatic material, 0.6 for some and 0.95 for weak materials.
     λ_hydrostatic = 0.4
     λ_medium = 0.6
-    λ_weak = 0.999
-    
+    λ_weak = 0.95
+    ν = 0.5
     # Cp = 750    # J / kg K
     # Define rheology struct
     return rheology = (
@@ -36,7 +36,7 @@ function init_rheologies()
             # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((
-                ConstantElasticity(; G=6.7e10),
+                ConstantElasticity(; G=6.7e10, ν = ν),
                 DislocationCreep(;
                 A=2.513e-17,
                 E=5.32e5,
@@ -77,7 +77,7 @@ function init_rheologies()
             # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
             CompositeRheology=CompositeRheology((
-                ConstantElasticity(; G=6.7e10),
+                ConstantElasticity(; G=6.7e10, ν = ν),
                 DislocationCreep(;
                 A=1.9960e-21,
                 E=4.7e5,
@@ -87,7 +87,8 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e6, # edit v0.101
                     ϕ=asind(0.100*(1-λ_weak)),
-                    η_vp=0)
+                    η_vp=0
+                )
             )),
         ),
 
@@ -107,7 +108,7 @@ function init_rheologies()
             # # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((
-                ConstantElasticity(; G=2.5e10),
+                ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
                 A=5.076142131979696e-18,
                 E=1.54e5,
@@ -136,7 +137,7 @@ function init_rheologies()
             # # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((
-                ConstantElasticity(; G=2.5e10),
+                ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
                 A=2.0833333333333332e-23,
                 E=2.38e5,
@@ -165,7 +166,7 @@ function init_rheologies()
             # # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
-                ConstantElasticity(; G=2.5e10),
+                ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
                 A=5.076142131979696e-18,
                 E=1.54e5,
@@ -194,7 +195,7 @@ function init_rheologies()
             # # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
-                ConstantElasticity(; G=1.0e10),
+                ConstantElasticity(; G=1.0e10, ν = ν),
                 DislocationCreep(;
                 A=5.076142131979696e-18,
                 E=1.54e5,

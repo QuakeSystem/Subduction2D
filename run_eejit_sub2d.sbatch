@@ -1,9 +1,9 @@
 #!/bin/sh
-#SBATCH --ntasks=2
+#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-task=1
 #SBATCH --threads-per-core=1
-##### SBATCH --gres=gpu
+# SBATCH --gres=gpu
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH -o job.%N.%j.out  # STDOUT
@@ -56,6 +56,7 @@ echo "Running on hosts: $SLURM_NODELIST"
 echo "Current working directory is `pwd`"
 
 echo "  submitting the first job: `date` "
-# julia --project ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
-/scratch/tectonics/GPU4GEO/julia_local/julia_depot/bin/mpiexecjl -n 2 julia --project=. ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
+# julia --project=. ./Original/Subduction2D.jl
+julia --project ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
+# /scratch/tectonics/GPU4GEO/julia_local/julia_depot/bin/mpiexecjl -n 2 julia --project=. ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
 echo "  first job finished: `date` "

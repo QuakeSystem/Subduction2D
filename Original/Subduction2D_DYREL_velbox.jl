@@ -1,20 +1,4 @@
-# BvA, November 2025
-# This script is based on JustRelax.jl/miniapps/subduction/2D.
-# Here, the model is bundled with the _setup and _rheology file and
-# is being tuned to the van Dinther (2019) paper on Mega Thrusts.
-using Infiltrator
-let
-    try
-        import Pkg
-        pkgdir = joinpath(@__DIR__, "..") # access the Project.toml one level above
-        Pkg.activate(pkgdir)
-        Pkg.instantiate()
-        @info "Successfully activated and instantiated project in $pkgdir"
-    catch e
-        @warn "Failed to activate/instantiate project: $e"
-    end
-end
-using JustRelax
+# Load script dependencies
 using GeoParams, CairoMakie
 
 const isCUDA = true
@@ -22,7 +6,7 @@ const isCUDA = true
 @static if isCUDA
     using CUDA
 end
-
+ 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
 const backend = @static if isCUDA
@@ -50,8 +34,8 @@ else
 end
 
 # Load file with all the rheology configurations
-include("Subduction2D_setup_SZU2019.jl")
-include("Subduction2D_rheology_SZU2019.jl")
+include("Subduction2D_setup_velbox.jl")
+include("Subduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -73,261 +57,6 @@ end
 # Initial pressure profile - not accurate
 @parallel function init_P!(P, ρg, z)
     @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
-
-function make_figure(
-        it, t, dt,
-        xvi, xci,
-        T_buffer, ρg,
-        stokes,
-        Vx_limited, Vy_limited,
-        pxv, pyv, clr, idxv,
-        xmin, xmax, ymin, ymax,
-        figpath; version = nothing
-    )
-
-    # Add isotherms
-    isotherms_C = [10, 50, 100, 150, 350, 450, 900, 1300]
-    isotherms_K = isotherms_C .+ 273
-    
-    # Vertex grid (for T, V, etc.)
-    xv = xvi[1][2:end-1] .* 1e-3
-    yv = xvi[2] .* 1e-3
-    Tv = Array(T_buffer[2:end-1, :])
-
-    xi_mask = xmin .≤ xv .≤ xmax
-    yi_mask = ymin .≤ yv .≤ ymax
-    xv_zoom = xv[xi_mask]
-    yv_zoom = yv[yi_mask]
-    Tv_zoom = Tv[xi_mask, yi_mask]
-
-    # Cell-centered grid (for density, stress, viscosity)
-    xc = xci[1] .* 1e-3
-    yc = xci[2] .* 1e-3
-    ρ  = Array(ustrip.(ρg[2])) ./ 9.81
-    isograds_density = [2700, 2800, 2900, 3100, 3200, 3250, 3300, 3350]
-
-    # Velocity plot limits at 10 cm/yr (unit is in m/s)
-    vmin = -0.1 / (365.25 * 24 * 3600)
-    vmax = +0.1 / (365.25 * 24 * 3600)
-
-    # Custom color range for viscosity
-    visc_min = log10(1.0e18)
-    visc_max = log10(1.0e24)
-
-    # Custom color range for strain rate
-    ε_min = -16
-    ε_max = -12
-
-    # Convert time to Myr and dt to Kyr for the title
-    t_Myr = t / (3600 * 24 * 365.25 * 1.0e6)
-    t_Myr_round = round(t_Myr; digits = 2)
-    t_Kyr = round(dt / (3600 * 24 * 365.25 * 1000); digits = 2)
-
-    fig = Figure(size = (1500, 600))
-
-    fig[0, :] = GridLayout()
-
-    Label(
-        fig[0, 1],
-        "Subduction2D - SZU2019 | version: $version | t = $t_Myr_round Myr | dt = $t_Kyr Kyr | it = $it",
-        fontsize = 28,
-        halign = :center,
-        tellwidth = false
-    )
-
-    ar = 2.8
-    ax1 = Axis(fig[1, 1], aspect = ar, title = "Material Phase")
-    ax2 = Axis(fig[2, 1], aspect = ar, title = "Temperature [K]")
-    ax3 = Axis(fig[3, 1], aspect = ar, title = "Density [kg/m³]")
-    ax4 = Axis(fig[1, 3], aspect = ar, title = "Vx [m/s]")
-    ax5 = Axis(fig[2, 3], aspect = ar, title = "Vy [m/s]")
-    ax6 = Axis(fig[3, 3], aspect = ar, title = "log10(τII) [Pa]")
-    ax7 = Axis(fig[1, 5], aspect = ar, title = "log10(εII)")
-    ax8 = Axis(fig[2, 5], aspect = ar, title = "log10(η)")
-    ax9 = Axis(fig[3, 5], aspect = ar, title = "log10(η_vep)")
-
-    # Apply zoom limits
-    for ax in (ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9)
-        xlims!(ax, xmin, xmax)
-        ylims!(ax, ymin, ymax)
-    end
-
-    # ---- Plots ----
-    # Material phase
-    h1 = scatter!(ax1, pxv[idxv], pyv[idxv], color = clr[idxv], markersize = 1)
-
-    contour!(
-        ax1,
-        xv_zoom,
-        yv_zoom,
-        Tv_zoom;
-        levels = isotherms_K,
-        labels=true,
-        labelsize = 12,
-        color = :white,
-        linewidth = 1.5
-    )
-
-    # Temperature
-    h2 = heatmap!(
-        ax2,
-        xc,
-        yc,
-        Array(T_buffer[2:(end - 1), :]),
-        colorrange = (253, 1718),
-        colormap = :vik
-    )
-
-    contour!(
-        ax2,
-        xv_zoom,
-        yv_zoom,
-        Tv_zoom;
-        levels = isotherms_K,
-        labels=true,
-        labelsize = 12,
-        color = :white,
-        linewidth = 1.5
-    )
-
-
-    # Density
-    h3 = heatmap!(
-        ax3,
-        xc,
-        yc,
-        ρ;
-        colormap = :vik,
-        colorrange = (2500, 3300)
-    )
-
-    contour!(
-        ax3,
-        xc,
-        yc,
-        ρ;
-        levels = isograds_density,
-        labels=true,
-        labelsize = 12,
-        color = :white,
-        linewidth = 1.5
-    )
-
-    # Velocity x-direction
-    h4 = heatmap!(
-        ax4,
-        xv,
-        yv,
-        Vx_limited;
-        colormap = :vik,
-        colorrange = (vmin, vmax)
-    )
-
-    # Velocity y-direction
-    h5 = heatmap!(
-        ax5,
-        xv,
-        yv,
-        Vy_limited;
-        colormap = :vik,
-        colorrange = (vmin, vmax)
-    )
-
-    # Second invariant of the stress tensor
-    h6 = heatmap!(
-        ax6,
-        xc,
-        yc,
-        Array(log10.(stokes.τ.II)),
-        colormap = :batlow
-    )
-
-    # Second invariant of the strain rate tensor
-    h7 = heatmap!(
-        ax7,
-        xc,
-        yc,
-        Array(log10.(stokes.ε.II));
-        colormap = :vik,
-        colorrange = (ε_min, ε_max)
-    )
-
-    contour!(
-        ax7,
-        xv_zoom,
-        yv_zoom,
-        Tv_zoom;
-        levels = isotherms_K,
-        labels=true,
-        labelsize = 12,
-        color = :white,
-        linewidth = 1.5
-    )
-
-    # Viscosity
-    h8 = heatmap!(
-        ax8,
-        xc,
-        yc,
-        Array(log10.(stokes.viscosity.η));
-        colormap = :vik,
-        colorrange = (visc_min, visc_max)
-    )
-    contour!(
-        ax8,
-        xv_zoom,
-        yv_zoom,
-        Tv_zoom;
-        levels = isotherms_K,
-        labels=true,
-        labelsize = 12,
-        color = :white,
-        linewidth = 1.5
-    )
-
-    # Visco_plasto_elastic viscosity
-    h9 = heatmap!(
-        ax9,
-        xc,
-        yc,
-        Array(log10.(stokes.viscosity.η_vep));
-        colormap = :vik,
-        colorrange = (visc_min, visc_max)
-    )
-    contour!(
-        ax9,
-        xv,
-        yv,
-        Tv;
-        levels = isotherms_K,
-        labels=true,
-        labelsize = 12,
-        color = :white,
-        linewidth = 1.5
-    )
-
-
-    # Colorbars
-    for (row, col, h) in [
-            (1, 2, h1),
-            (2, 2, h2),
-            (3, 2, h3),
-            (1, 4, h4),
-            (2, 4, h5),
-            (3, 4, h6),
-            (1, 6, h7),
-            (2, 6, h8),
-            (3, 6, h9),
-        ]
-        gl = fig[row, col] = GridLayout()
-        Colorbar(gl[1, 1], h; height = 120)
-    end
-
-    linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9)
-
-    save(figpath, fig)
     return nothing
 end
 
@@ -486,7 +215,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false, version = nothing)
+function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
     ni = nx, ny           # number of cells
@@ -496,9 +225,9 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheologies()
-    dt = 0.05e3 * 3600 * 24 * 365
-    dt_max = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    rheology = init_rheology_nonNewtonian_plastic()
+    dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt_max = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -532,7 +261,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    Ttop = -10 + 273
+    Ttop = 20 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
     @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
@@ -552,7 +281,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (5.0e18, 5.0e23)
+    viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     # ----------------------------------------------------
@@ -602,7 +331,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Time loop
     t, it = 0.0, 0
-    while it < 1000
+    while it < 160 #000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
@@ -644,7 +373,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     nout = 400,
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
-                    viscosity_relaxation = 2.0e-2,
+                    viscosity_relaxation = 1.0e-2,
                     viscosity_cutoff = (1.0e18, 1.0e23),
                     apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
                 )
@@ -657,10 +386,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
+        # println("   Time/iteration:  $(t_stokes / out.iter) s")
+
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
-        dt_plot = dt
         dt = compute_dt(stokes, di, dt_max) #* 0.8
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
@@ -681,7 +411,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 igg = igg,
                 phase = phase_ratios,
                 iterMax = 50.0e3,
-                nout = 2.0e2,
+                nout = 1.0e2,
                 verbose = true,
             )
         )
@@ -718,12 +448,13 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         t += dt
 
         # Data I/O and plotting ---------------------
-        if it == 1 || it == 2 || rem(it, 5) == 0
+        if it == 1 || rem(it, 5) == 0
             # checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
             # checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                # map staggered residuals Rx, Ry to a cell-centered array matching P
                 Rx_c = zeros(size(stokes.P))
                 Ry_c = zeros(size(stokes.P))
                 @views Rx_c[axes(stokes.R.Rx, 1), axes(stokes.R.Rx, 2)] .= Array(stokes.R.Rx)
@@ -739,8 +470,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 data_c = (;
                     P   = Array(stokes.P),
                     η   = Array(η_vep),
-                    Rx  = Array(Rx_c),
-                    Ry  = Array(Ry_c),
+                    Rx  = Rx_c,
+                    Ry  = Ry_c,
                     Rmag = sqrt.(Rx_c .^ 2 .+ Ry_c .^ 2),
                 )
                 velocity_v = (
@@ -761,79 +492,52 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             # Make particles plottable
             p = particles.coords
             ppx, ppy = p
-            pxv = Array(ppx.data[:] ./ 1.0e3)
-            pyv = Array(ppy.data[:] ./ 1.0e3)
-            clr = Array(pPhases.data[:])
+            pxv = ppx.data[:] ./ 1.0e3
+            pyv = ppy.data[:] ./ 1.0e3
+            clr = pPhases.data[:]
             # clr      = pT.data[:]
-            idxv = Array(particles.index.data[:])
+            idxv = particles.index.data[:]
 
-            # --- New figure: velocity with limited range ---
-            vmin = -0.1 / (365.25 * 24 * 3600)     # -10 cm/yr
-            vmax = +0.1 / (365.25 * 24 * 3600)     # +10 cm/yr
-            Vx_raw = Array(stokes.V.Vx[2:(end - 1), :])
-            Vx_limited = clamp.(Vx_raw, vmin, vmax)
-            Vy_raw = Array(stokes.V.Vy[2:(end - 1), :])
-            Vy_limited = clamp.(Vy_raw, vmin, vmax)
+            # Make Makie figure
+            ar = 3
+            fig = Figure(size = (1200, 900), title = "t = $t")
+            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+            ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
+            ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
+            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+            # Plot temperature
+            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :batlow)
+            # Plot particles phase
+            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
+            # Plot 2nd invariant of strain rate
+            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
+            # Plot effective viscosity
+            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax2)
+            hidexdecorations!(ax3)
+            Colorbar(fig[1, 2], h1)
+            Colorbar(fig[2, 2], h2)
+            Colorbar(fig[1, 4], h3)
+            Colorbar(fig[2, 4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
+            fig
+            save(joinpath(figdir, "$(it).png"), fig)
 
-
-            # --- ZOOM REGION ---
-            xmin_zoom, xmax_zoom = 800, 1100
-            ymin_zoom, ymax_zoom = -80, 0
-
-            # --- FULL DOMAIN ---
-            xmin_full = minimum(xvi[1]) * 1.0e-3
-            xmax_full = maximum(xvi[1]) * 1.0e-3
-            ymin_full = minimum(xvi[2]) * 1.0e-3
-            ymax_full = maximum(xvi[2]) * 1.0e-3
-
-            # FULL DOMAIN FIGURE
-            make_figure(
-                it, t, dt_plot,
-                xvi, xci,
-                T_buffer, ρg,
-                stokes,
-                Vx_limited, Vy_limited,
-                pxv, pyv, clr, idxv,
-                xmin_full, xmax_full, ymin_full, ymax_full,
-                joinpath(figdir, "full_$(lpad(it, 2, "0")).png"), version=version
-            )
-
-            # ZOOMED FIGURE
-            make_figure(
-                it, t, dt_plot,
-                xvi, xci,
-                T_buffer, ρg,
-                stokes,
-                Vx_limited, Vy_limited,
-                pxv, pyv, clr, idxv,
-                xmin_zoom, xmax_zoom, ymin_zoom, ymax_zoom,
-                joinpath(figdir, "zoom_$(lpad(it, 2, "0")).png"), version=version
-            )
-
-
-            # --- FULL DOMAIN ---
-            xmin_full = minimum(xvi[1]) * 1.0e-3
-            xmax_full = maximum(xvi[1]) * 1.0e-3
-            ymin_full = minimum(xvi[2]) * 1.0e-3
-            ymax_full = maximum(xvi[2]) * 1.0e-3
-
+        end
+        # ------------------------------
 
     end
 
-        # ------------------------------
-    end 
     return nothing
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.233"
-figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
-println(version)
-# n = 128
-# nx, ny = n * 10, 192
-n = 32
-nx, ny = n * 10, round(Int, n * 1.5)
+figdir = "Subduction2D_DYREL_velbox"
+n = 64
+nx, ny = n * 2, n
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
@@ -842,27 +546,4 @@ else
     igg
 end
 
-# List of files you want to copy
-script_files = [
-    basename(@__FILE__),
-    "Subduction2D_setup_SZU2019.jl",
-    "Subduction2D_rheology_SZU2019.jl",
-]
-
-# Ensure the figdir directory exists
-isdir(figdir) || mkpath(figdir)
-
-# Get the directory of the currently-running script
-basepath = @__DIR__
-prefix = "used_"
-
-# Copy each script into the figdir folder
-for f in script_files
-    src = joinpath(basepath, f)
-    name, ext = splitext(f)
-    dest = joinpath(figdir, prefix * name * ext)
-    cp(src, dest; force = true)
-end
-
-
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, version = version);
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

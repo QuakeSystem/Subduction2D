@@ -3,9 +3,9 @@ using GeophysicalModelGenerator
 
 struct VelBox2D
     cenx::Float64
-    ceny::Float64
+    cenz::Float64
     widthx::Float64
-    widthy::Float64
+    widthz::Float64
     vx::Float64
     vy::Float64
     has_vx::Bool
@@ -16,9 +16,9 @@ const vel_boxes_2D = VelBox2D[]
 
 function add_vel_box!(
     ; cenx,
-      ceny,
+      cenz,
       widthx,
-      widthy,
+      widthz,
       vx = nothing,
       vy = nothing,
 )
@@ -30,9 +30,9 @@ function add_vel_box!(
         vel_boxes_2D,
         VelBox2D(
             Float64(cenx),
-            Float64(ceny),
+            Float64(cenz),
             Float64(widthx),
-            Float64(widthy),
+            Float64(widthz),
             vx_val,
             vy_val,
             has_vx,
@@ -254,15 +254,15 @@ function GMG_subduction_2D(nx, ny)
     )
     add_vel_box!(
         cenx   = 180 * 1.0e3,  # m
-        ceny   = -54.8 * 1.0e3,          # m
+        cenz   = -54.8 * 1.0e3,          # m
         widthx = 20 * 1.0e3,          # m
-        widthy = 23.6 * 1.0e3,           # m
+        widthz = 23.6 * 1.0e3,           # m
         vx     = 7.5 * 0.01 / (3600*24*365)             # m/s (optional)
     #    vy     = -4.0e-9,                    # m/s (optional)
     )
 
     Grid2D = addfield(Grid2D, (; Phases, Temp))
-    # write_paraview(Grid2D, "Initial_Setup_Subduction_rank")
+    write_paraview(Grid2D, "Initial_Setup_Subduction_rank")
     li = (abs(last(x) - first(x)), abs(last(z) - first(z))) .* 1.0e3
     origin = (x[1], z[1]) .* 1.0e3
 
