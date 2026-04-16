@@ -144,7 +144,7 @@ function make_figure(
     ax5 = Axis(fig[2, 3], aspect = ar, title = "Vy [m/s]")
     ax6 = Axis(fig[3, 3], aspect = ar, title = "log10(τII) [Pa]")
     ax7 = Axis(fig[1, 5], aspect = ar, title = "log10(εII)")
-    ax8 = Axis(fig[2, 5], aspect = ar, title = "log10(η)")
+    ax8 = Axis(fig[2, 5], aspect = ar, title = "log10(εII_pl)")
     ax9 = Axis(fig[3, 5], aspect = ar, title = "log10(η_vep)")
 
     # Apply zoom limits
@@ -265,14 +265,14 @@ function make_figure(
         linewidth = 1.5
     )
 
-    # Viscosity
+    # plastic strain rate
     h8 = heatmap!(
         ax8,
         xc,
         yc,
-        Array(log10.(stokes.viscosity.η));
+        Array(log10.(stokes.EII_pl));
         colormap = :vik,
-        colorrange = (visc_min, visc_max)
+        colorrange = (ε_min, ε_max)
     )
     contour!(
         ax8,
@@ -551,7 +551,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (5.0e18, 5.0e23)
+    viscosity_cutoff = (1.0e20, 5.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     # ----------------------------------------------------
@@ -644,7 +644,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 2.0e-2,
-                    viscosity_cutoff = (1.0e18, 1.0e23),
+                    viscosity_cutoff = viscosity_cutoff,
                     apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
                 )
             )
@@ -826,13 +826,13 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.232"
+version = "v0.241"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
-# n = 128
-# nx, ny = n * 10, 192
-n = 32
-nx, ny = n * 10, round(Int, n * 1.5)
+n = 128
+nx, ny = n * 10, 192
+# n = 32
+# nx, ny = n * 10, round(Int, n * 1.5)
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
