@@ -19,6 +19,7 @@ function init_rheologies()
     λ_medium = 0.6
     λ_weak = 0.95
     ν = 0.5
+    Ψ = 0.01
     # Cp = 750    # J / kg K
     # Define rheology struct
     return rheology = (
@@ -46,7 +47,8 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.6*(1-λ_hydrostatic)),
-                    η_vp=0
+                    η_vp=0,
+                    Ψ = Ψ
                 )
             )),
         ),
@@ -87,7 +89,8 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e6, # edit v0.101
                     ϕ=asind(0.100*(1-λ_weak)),
-                    η_vp=0
+                    η_vp=0,
+                    Ψ = Ψ
                 )
             )),
         ),
@@ -118,7 +121,8 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e6,
                     ϕ=asind(0.5*(1-λ_weak)), # Only value not exactly same as SZU2019, as mu there is 10 (??)
-                    η_vp=0)
+                    η_vp=0,
+                    Ψ = Ψ)
             )),
         ),
 
@@ -147,7 +151,8 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.85*(1-λ_weak)),
-                    η_vp=0)
+                    η_vp=0,
+                    Ψ = Ψ)
             )),
         ),
 
@@ -176,7 +181,8 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.72*(1-λ_hydrostatic)),
-                    η_vp=0)
+                    η_vp=0,
+                    Ψ = Ψ)
             )),
         ),
 
@@ -205,7 +211,8 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.35*(1-λ_medium)),
-                    η_vp=0)
+                    η_vp=0,
+                    Ψ = Ψ)
             )),
             ),
         SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition

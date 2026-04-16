@@ -2,7 +2,6 @@
 # This script is based on JustRelax.jl/miniapps/subduction/2D.
 # Here, the model is bundled with the _setup and _rheology file and
 # is being tuned to the van Dinther (2019) paper on Mega Thrusts.
-using Infiltrator
 let
     try
         import Pkg
@@ -637,7 +636,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 dt,
                 igg;
                 kwargs = (;
-                    verbose_PH = false,
+                    verbose_PH = true,
                     verbose_DR = false,
                     iterMax = 50.0e3,
                     rel_drop = 1.0e-2,
@@ -827,7 +826,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.233"
+version = "v0.232"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
 # n = 128
