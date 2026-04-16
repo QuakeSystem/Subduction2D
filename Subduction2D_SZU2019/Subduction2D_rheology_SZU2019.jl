@@ -47,7 +47,7 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.6*(1-λ_hydrostatic)),
-                    η_vp=1e18,
+                    η_vp=1e20,
                     Ψ = Ψ
                 )
             )),
@@ -89,7 +89,7 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e6, # edit v0.101
                     ϕ=asind(0.100*(1-λ_weak)),
-                    η_vp=1e18,
+                    η_vp=1e20,
                     Ψ = Ψ
                 )
             )),
@@ -121,7 +121,7 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e6,
                     ϕ=asind(0.5*(1-λ_weak)), # Only value not exactly same as SZU2019, as mu there is 10 (??)
-                    η_vp=1e18,
+                    η_vp=1e20,
                     Ψ = Ψ)
             )),
         ),
@@ -151,7 +151,7 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.85*(1-λ_weak)),
-                    η_vp=1e18,
+                    η_vp=1e20,
                     Ψ = Ψ)
             )),
         ),
@@ -181,7 +181,7 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.72*(1-λ_hydrostatic)),
-                    η_vp=1e18,
+                    η_vp=1e20,
                     Ψ = Ψ)
             )),
         ),
@@ -211,7 +211,7 @@ function init_rheologies()
                 DruckerPrager_regularised(;
                     C=1e7,
                     ϕ=asind(0.35*(1-λ_medium)),
-                    η_vp=1e18,
+                    η_vp=1e20,
                     Ψ = Ψ)
             )),
             ),

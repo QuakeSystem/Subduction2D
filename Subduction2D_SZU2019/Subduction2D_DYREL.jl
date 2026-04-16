@@ -496,7 +496,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
-    dt = 0.05e3 * 3600 * 24 * 365
+    dt = 0.005e3 * 3600 * 24 * 365
     dt_max = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -660,8 +660,16 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
         dt_plot = dt
-        dt = compute_dt(stokes, di, dt_max) #* 0.8
-        # compute strain rate 2nd invartian - for plotting
+        if it in 1:2
+            dt = 0.05 * 3600 * 24 * 365
+            viscosity_cutoff = (1.0e21, 5.0e23)
+            println("viscosity cutoff now $viscosity_cutoff")
+        else
+            dt = compute_dt(stokes, di, dt_max) #* 0.8
+            viscosity_cutoff = (1.0e18, 5.0e23)
+            println("viscosity cutoff now $viscosity_cutoff")
+        end
+            # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
@@ -826,13 +834,14 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.241"
+version = "v0.244_lowres"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
-n = 128
-nx, ny = n * 10, 192
-# n = 32
-# nx, ny = n * 10, round(Int, n * 1.5)
+# n = 128
+# nx, ny = n * 10, 192
+# n = 80
+n = 32
+nx, ny = n * 10, round(Int, n * 1.5)
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
