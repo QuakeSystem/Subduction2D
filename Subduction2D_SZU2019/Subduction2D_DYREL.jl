@@ -833,7 +833,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-do_vtk = true # set to true to generate VTK files for ParaView
+do_vtk = false # set to true to generate VTK files for ParaView
 version = "v0.244_lowres"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
