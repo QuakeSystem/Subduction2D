@@ -17,7 +17,7 @@ function init_rheologies()
     # lambda λ is Pf/Ps, 0.4 for any hydrostatic material, 0.6 for some and 0.95 for weak materials.
     λ_hydrostatic = 0.4
     λ_medium = 0.6
-    λ_weak = 0.95
+    λ_weak = 0.8
     ν = 0.45
     Ψ = 0
     η_vp = 1e20

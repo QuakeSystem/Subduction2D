@@ -829,13 +829,13 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.261_noslip_andhigherdt_cutoff_5e19_resx2"
+version = "v0.262_noslip_andhigherdt_cutoff_5e19_lowerfric"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
 # n=144
 # n = 80
 # n = 32
-nx, ny = round(Int, 2*1466) , round(Int, 2*270)
+nx, ny = 1466, 270
 # nx, ny = n * 10, round(Int, n * 1.5)
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
