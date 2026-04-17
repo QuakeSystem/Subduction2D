@@ -496,8 +496,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
-    dt = 0.005e3 * 3600 * 24 * 365
-    dt_max = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt = 0.005e3 * 3600 * 24 * 365.25
+    dt_max = 10e3 * 3600 * 24 * 365.25 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -656,17 +656,19 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
+        t_Kyr = round(dt / (3600 * 24 * 365.25 * 1000); digits = 2)
+        println("Timestep:           $t_Kyr")
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
         dt_plot = dt
-        if it in 1:2
-            dt = 0.05 * 3600 * 24 * 365
-            viscosity_cutoff = (1.0e21, 5.0e23)
+        if it > 4
+            dt = compute_dt(stokes, di, dt_max) * 0.8
+            viscosity_cutoff = (5.0e19, 5.0e23)
             println("viscosity cutoff now $viscosity_cutoff")
         else
-            dt = compute_dt(stokes, di, dt_max) #* 0.8
-            viscosity_cutoff = (1.0e18, 5.0e23)
+            viscosity_cutoff = (1.0e21, 5.0e23)
+            dt = 0.05 * 3600 * 24 * 365.25
             println("viscosity cutoff now $viscosity_cutoff")
         end
             # compute strain rate 2nd invartian - for plotting
@@ -833,15 +835,15 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-do_vtk = false # set to true to generate VTK files for ParaView
-version = "v0.245_lowres"
+do_vtk = true # set to true to generate VTK files for ParaView
+version = "v0.254_stickyair_1e20"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
-# n = 128
-# nx, ny = n * 10, 192
+# n=144
 # n = 80
-n = 32
-nx, ny = n * 10, round(Int, n * 1.5)
+# n = 32
+nx, ny = 1466, 270
+# nx, ny = n * 10, round(Int, n * 1.5)
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
