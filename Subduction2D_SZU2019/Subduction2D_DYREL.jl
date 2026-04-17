@@ -496,7 +496,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
-    dt = 0.005e3 * 3600 * 24 * 365.25
+    dt = 0.5e3 * 3600 * 24 * 365.25
     dt_max = 10e3 * 3600 * 24 * 365.25 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
@@ -551,7 +551,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (1.0e21, 5.0e23)
+    viscosity_cutoff = (5.0e19, 5.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     # ----------------------------------------------------
@@ -563,7 +563,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
-        free_slip = (left = true, right = true, top = true, bot = true),
+        free_slip = (left = false, right = false, top = false, bot = false),
+        no_slip = (left = true, right = true, top = true, bot = true),
         free_surface = false,
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -662,15 +663,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
         # compute time step
         dt_plot = dt
-        if it > 4
-            dt = compute_dt(stokes, di, dt_max) * 0.8
-            viscosity_cutoff = (5.0e19, 5.0e23)
-            println("viscosity cutoff now $viscosity_cutoff")
-        else
-            viscosity_cutoff = (1.0e21, 5.0e23)
-            dt = 0.05 * 3600 * 24 * 365.25
-            println("viscosity cutoff now $viscosity_cutoff")
-        end
+        dt = compute_dt(stokes, di, dt_max) * 0.8
             # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
@@ -836,7 +829,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.254_stickyair_1e20"
+version = "v0.258_noslip_andhigherdt_cutoff_5e19"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
 # n=144

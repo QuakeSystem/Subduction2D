@@ -63,7 +63,7 @@ function init_rheologies()
             Density=ConstantDensity(; ρ=1.00),
             HeatCapacity=ConstantHeatCapacity(; Cp=3.33e6),
             Conductivity=ConstantConductivity(; k=1.0),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),)),
         ),
 
         # SZU material 12
