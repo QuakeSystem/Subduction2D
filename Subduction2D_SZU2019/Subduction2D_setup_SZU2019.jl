@@ -43,9 +43,9 @@ function add_vel_box!(
 end
 
 function GMG_subduction_2D(nx, ny)
-    model_depth = 175.0 # km
+    model_depth = 260.0 # km
     nx, nz = nx, ny
-    Tbot = 1718 - 273.15 # K, 1445 C, from Katsura 2022
+    Tbot = 1743 - 273.15 # K, 1445 C, from Katsura 2022 # increased by 25 since v0.271 for 260km depth
     xmin = 0 # km, left edge of model
     xmax = 1500 # km, right edge of model
     extra_air_thickness = 0 # km, can be increased
@@ -248,9 +248,11 @@ function GMG_subduction_2D(nx, ny)
         Phases,
         Temp,
         Grid2D;
-        xlim=(xmin,xmin+4),
+        xlim=(xmin,xmin+10),
         zlim=(-100, 0),
-        phase=ConstantPhase(8)
+        phase=ConstantPhase(8),
+        T=LinearTemp(Ttop=200, Tbot=Tlab+200)
+        
     )
     add_vel_box!(
         cenx   = 180 * 1.0e3,  # m

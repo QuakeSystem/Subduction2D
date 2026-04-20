@@ -535,8 +535,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
     @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
+    top_dirichlet = @falses(size(thermal.T)...)
+    top_dirichlet[2:(end - 1), end] .= true
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        dirichlet = (; mask = top_dirichlet, constant = Ttop)
     )
     thermal_bcs!(thermal, thermal_bc)
     @views thermal.T[:, end] .= Ttop
@@ -551,7 +554,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
 
     # Rheology
     args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (5.0e19, 5.0e23)
+    viscosity_cutoff = (1e21, 5.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     # ----------------------------------------------------
@@ -603,7 +606,12 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Time loop
     t, it = 0.0, 0
     while it < 1000
-
+        if it > 4
+            viscosity_cutoff = (5e19, 5.0e23)
+        end
+        if it > 9
+            viscosity_cutoff = (5e18, 5.0e23)
+        end
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, xvi, particles)
         @views T_buffer[:, end] .= Ttop
@@ -829,14 +837,14 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.262_noslip_andhigherdt_cutoff_5e19_lowerfric"
+version = "v0.271_fixed0Ctop_midres_weaker_left_bry_hotter_deeper"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
 # n=144
-# n = 80
+n = 80
 # n = 32
-nx, ny = 1466, 270
-# nx, ny = n * 10, round(Int, n * 1.5)
+# nx, ny = 1466, 270
+nx, ny = n * 10, round(Int, n * 1.5 * 1.5) # increased vertical size by 50%
 
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

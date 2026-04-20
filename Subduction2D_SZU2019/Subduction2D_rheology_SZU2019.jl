@@ -17,7 +17,7 @@ function init_rheologies()
     # lambda λ is Pf/Ps, 0.4 for any hydrostatic material, 0.6 for some and 0.95 for weak materials.
     λ_hydrostatic = 0.4
     λ_medium = 0.6
-    λ_weak = 0.8
+    λ_weak = 0.95
     ν = 0.45
     Ψ = 0
     η_vp = 1e20
@@ -48,7 +48,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.6*(1-λ_hydrostatic)),
+                    ϕ=asind(0.99*(1-λ_hydrostatic)), # v0.263
                     η_vp=η_vp,
                     Ψ = Ψ
                 )
@@ -222,7 +222,7 @@ function init_rheologies()
             Density=ConstantDensity(; ρ=2600),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
             Conductivity=ConstantConductivity(; k=1.0),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),))
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+19),))
         ))
 
 end
