@@ -837,7 +837,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-version = "v0.271_fixed0Ctop_midres_weaker_left_bry_hotter_deeper"
+version = "v0.271_rerunneweejit_gpu041-4"
 figdir = "Subduction2D_SZU2019/Figures/Subduction2D_DYREL/dyrel_$version"
 println(version)
 # n=144

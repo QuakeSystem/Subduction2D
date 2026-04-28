@@ -4,6 +4,7 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --threads-per-core=1
 #SBATCH --gres=gpu
+#SBATCH --exclude=gpu045
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH -o job.%N.%j.out  # STDOUT
