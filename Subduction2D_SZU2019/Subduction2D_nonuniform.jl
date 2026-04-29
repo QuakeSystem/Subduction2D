@@ -68,8 +68,8 @@ function prepare_visualisation(ni; version=nothing)
     do_vtk   = true # set to true to generate VTK files for ParaView
     pictures = true # set to true to generate PNG figures of particles and fields using Makie
     # IF VTK OUTPUT YES
-    pvd_name = "Subduction2d"
-    figdir   = "Subduction2D_SZU2019/Figures/Subduction2D_nonuniform_gpu/$version"
+    pvd_name = "Subduction2D"
+    figdir   = "Subduction2D_SZU2019/Figures/Subduction2D_nonuniform/$version"
     save_particle_points = false # set to true to save particle point clouds as VTK files (can generate large files)
     vtk_every = 1 # save VTK every N iterations
     particle_vtk_every = 1 # save particle VTK every N iterations
@@ -602,7 +602,7 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-version = "v0.272_neweejit_nonuniform"
+version = "v0.272_7.5cmyr"
 println("version is $version")
 # MODEL SETUP
 # n = 256
