@@ -10,7 +10,7 @@ function make_figure(
     )
 
     # Add isotherms
-    isotherms_C = [10, 50, 100, 150, 350, 450, 900, 1300]
+    isotherms_C = [100, 150, 350, 450, 900, 1300]
     isotherms_K = isotherms_C .+ 273
     Tv = Array(T_buffer)          # (321, 73) 
     xv = Array(xvi[1]) .* 1e-3   # length 321 (nx+1)
@@ -87,7 +87,7 @@ function make_figure(
         labels=true,
         labelsize = 12,
         color = :white,
-        linewidth = 1.5
+        linewidth = 1.0
     )
 
     # Temperature
@@ -109,7 +109,7 @@ function make_figure(
         labels=true,
         labelsize = 12,
         color = :white,
-        linewidth = 1.5
+        linewidth = 1.0
     )
 
 
@@ -132,7 +132,7 @@ function make_figure(
         labels=true,
         labelsize = 12,
         color = :white,
-        linewidth = 1.5
+        linewidth = 1.0
     )
 
     # Velocity x-direction
@@ -183,7 +183,7 @@ function make_figure(
         labels=true,
         labelsize = 12,
         color = :white,
-        linewidth = 1.5
+        linewidth = 1.0
     )
 
     # plastic strain rate
@@ -204,7 +204,8 @@ function make_figure(
         labels=true,
         labelsize = 12,
         color = :white,
-        linewidth = 1.5
+        linewidth = 1.0
+
     )
 
     # Visco_plasto_elastic viscosity
@@ -225,7 +226,7 @@ function make_figure(
         labels=true,
         labelsize = 12,
         color = :white,
-        linewidth = 1.5
+        linewidth = 1.0
     )
 
 

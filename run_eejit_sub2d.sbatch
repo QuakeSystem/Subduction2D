@@ -58,6 +58,6 @@ echo "Current working directory is `pwd`"
 
 echo "  submitting the first job: `date` "
 # julia --project=. ./Original/Subduction2D.jl
-julia --project ./Subduction2D_SZU2019/Subduction2D_DYREL_nonuniform.jl
+julia --project ./Subduction2D_SZU2019/Subduction2D_nonuniform.jl
 # /scratch/tectonics/GPU4GEO/julia_local/julia_depot/bin/mpiexecjl -n 2 julia --project=. ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
 echo "  first job finished: `date` "

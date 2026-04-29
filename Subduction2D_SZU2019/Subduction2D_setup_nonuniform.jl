@@ -135,11 +135,14 @@ function GMG_subduction_2D_with_coords(
     nx_points::Int,
     ny_points::Int;
     ref_grid::Int = 0,
-    refine_factor::Float64 = 8.0,
-    w_ref_ratio::Float64 = 1 / 2, 
-    k::Float64 = 8.0,
-    x_center_frac::Float64 = 0.58,
-    y_center_frac::Float64 = 0.65,
+    refine_factor_x::Float64 = 30.0,
+    refine_factor_y::Float64 = 10.0,
+    w_ref_ratio_x::Float64 = 1/2, 
+    w_ref_ratio_y::Float64 = 0.6, 
+    k_x::Float64 = 8.0,
+    k_y::Float64 = 12.0,
+    x_center_frac::Float64 = 0.525,
+    y_center_frac::Float64 = 0.9,
     verbose::Int = 1,
 )
     model_depth = 260.0 # km
@@ -154,10 +157,10 @@ function GMG_subduction_2D_with_coords(
         x0_km,
         x1_km;
         ref_grid = ref_grid,
-        refine_factor = refine_factor,
-        w_ref_ratio = w_ref_ratio/2,
+        refine_factor = refine_factor_x,
+        w_ref_ratio = w_ref_ratio_x,
         x_center_frac = x_center_frac,
-        k = k,
+        k = k_x,
         verbose = verbose,
     )
     z = subduction_nonuniform_coords_1d(
@@ -165,10 +168,10 @@ function GMG_subduction_2D_with_coords(
         z0_km,
         z1_km;
         ref_grid = ref_grid,
-        refine_factor = refine_factor*4,
-        w_ref_ratio = w_ref_ratio,
+        refine_factor = refine_factor_y,
+        w_ref_ratio = w_ref_ratio_y,
         x_center_frac = y_center_frac,
-        k = k,
+        k = k_y,
         verbose = verbose,
     )
 
@@ -383,7 +386,7 @@ function GMG_subduction_2D_with_coords(
         cenz   = -54.8 * 1.0e3,          # m
         widthx = 20 * 1.0e3,          # m
         widthz = 23.6 * 1.0e3,           # m
-        vx     = 7.5 * 0.01 / (3600*24*365)             # m/s (optional)
+        vx     = 5 * 0.01 / (3600*24*365)             # m/s (optional)
     #    vy     = -4.0e-9,                    # m/s (optional)
     )
 

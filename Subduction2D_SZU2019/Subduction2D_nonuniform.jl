@@ -368,7 +368,7 @@ function main(
 
     # Time loop
     t, it = 0.0, 0
-    while it < 100 #000 # run only for 5 Myrs
+    while it < 1000 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, particles)
@@ -563,12 +563,7 @@ function main(
                 xmax_full = maximum(xvi[1]) * 1.0e-3
                 ymin_full = minimum(xvi[2]) * 1.0e-3
                 ymax_full = maximum(xvi[2]) * 1.0e-3
-                println("nx=$nx, ny=$ny")
-                println("xvi[1]: ", length(xvi[1]), "  xvi[2]: ", length(xvi[2]))
-                println("xci[1]: ", length(xci[1]), "  xci[2]: ", length(xci[2]))
-                println("T_buffer: ", size(T_buffer))
-                println("Vx_v: ", size(vis.Vx_v))
-                println("stokes.P: ", size(stokes.P))
+
                 # FULL DOMAIN FIGURE
                 make_figure(
                     it, t, dt_plot,
@@ -602,7 +597,7 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-version = "v0.272_7.5cmyr"
+version = "v0.274_newresolution_also_v5cmyr"
 println("version is $version")
 # MODEL SETUP
 # n = 256
@@ -635,6 +630,6 @@ main(
     xci,
     nx = nx,
     ny = ny,
-    version=version,
+    version = version,
     ref_grid = ref_grid,
 );
