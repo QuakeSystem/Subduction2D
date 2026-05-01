@@ -61,8 +61,8 @@ function init_rheologies()
             Name="Air",
             Phase=2,
             Density=ConstantDensity(; ρ=1.00),
-            HeatCapacity=ConstantHeatCapacity(; Cp=3.33e6),
-            Conductivity=ConstantConductivity(; k=1.0),
+            HeatCapacity=ConstantHeatCapacity(; Cp=1e3),
+            Conductivity=ConstantConductivity(; k=1e-6),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),)),
         ),
 
@@ -219,10 +219,10 @@ function init_rheologies()
             ),
         SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
             Phase=8,
-            Density=ConstantDensity(; ρ=2600),
+            Density=ConstantDensity(; ρ=3250),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
-            Conductivity=ConstantConductivity(; k=1.0),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+19),))
+            Conductivity=ConstantConductivity(; k=2.5),
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),))
         ))
 
 end

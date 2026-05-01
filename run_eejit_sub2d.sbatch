@@ -7,9 +7,9 @@
 #SBATCH --exclude=gpu045
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
-#SBATCH -o job.%N.%j.out  # STDOUT
-#SBATCH -e job.%N.%j.err  # STDERR
-#SBATCH --job-name sub2d_eejit
+#SBATCH -o job.%N.%j.%x.out  # STDOUT
+#SBATCH -e job.%N.%j.%x.err  # STDERR
+#SBATCH --job-name v0.294_k=1000
 #SBATCH -t 30-00:00:00
 
 

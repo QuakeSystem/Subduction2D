@@ -84,7 +84,7 @@ function make_figure(
         yv_zoom,
         Tv_zoom;
         levels = isotherms_K,
-        labels=true,
+        labels=false,
         labelsize = 12,
         color = :white,
         linewidth = 1.0
@@ -106,7 +106,7 @@ function make_figure(
         yv_zoom,
         Tv_zoom;
         levels = isotherms_K,
-        labels=true,
+        labels=false,
         labelsize = 12,
         color = :white,
         linewidth = 1.0
@@ -180,7 +180,7 @@ function make_figure(
         yv_zoom,
         Tv_zoom;
         levels = isotherms_K,
-        labels=true,
+        labels=false,
         labelsize = 12,
         color = :white,
         linewidth = 1.0
@@ -201,7 +201,7 @@ function make_figure(
         yv_zoom,
         Tv_zoom;
         levels = isotherms_K,
-        labels=true,
+        labels=false,
         labelsize = 12,
         color = :white,
         linewidth = 1.0
@@ -223,7 +223,7 @@ function make_figure(
         yv,
         Tv;
         levels = isotherms_K,
-        labels=true,
+        labels=false,
         labelsize = 12,
         color = :white,
         linewidth = 1.0
@@ -247,6 +247,7 @@ function make_figure(
     end
 
     linkaxes!(ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9)
+    mkpath(dirname(figpath))
 
     save(figpath, fig)
     return nothing

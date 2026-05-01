@@ -37,8 +37,10 @@ else
 end
 
 # Load file with all the rheology configurations
-include("../Subduction2D_SZU2019/Subduction2D_setup_nonuniform.jl")
-include("../Subduction2D_SZU2019/Subduction2D_rheology.jl")
+setup_file = "Subduction2D_setup_nonuniform.jl"
+rheology_file = "Subduction2D_rheology.jl"
+include(setup_file)
+include(rheology_file)
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -88,6 +90,32 @@ function prepare_visualisation(ni; version=nothing)
 
     return vis
 end
+
+function copy_input_files(vis, setup, rheology)
+    # List of files you want to copy
+    input_files = [
+        basename(@__FILE__),
+        setup,
+        rheology,
+    ]
+
+    # Ensure the figdir directory exists
+    isdir(vis.figdir) || mkpath(figdir)
+
+    # Get the directory of the currently-running script
+    basepath = @__DIR__
+    prefix = "_used_"
+
+    # Copy each script into the figdir folder
+    for f in input_files
+        source = joinpath(basepath, f)
+        name, ext = splitext(f)
+        destination = joinpath(vis.figdir, prefix * name * ext)
+        cp(source, destination; force = true)
+    end
+    return nothing
+end
+
 # VELOCITY BOXES ROUTINES
 @parallel_indices (i, j) function _apply_vel_box_Vx!(
     Vx,
@@ -275,6 +303,7 @@ function main(
     # ----------------------------------------------------
     # Set flags and parameters for visualization and output and create folders for output
     vis = prepare_visualisation(ni, version=version)
+    copy_input_files(vis, setup_file, rheology_file)
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
     dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
@@ -564,29 +593,29 @@ function main(
                 ymin_full = minimum(xvi[2]) * 1.0e-3
                 ymax_full = maximum(xvi[2]) * 1.0e-3
 
-                # FULL DOMAIN FIGURE
-                make_figure(
-                    it, t, dt_plot,
-                    xvi, xci,
-                    T_buffer, ρg,
-                    stokes,
-                    Vx_limited, Vy_limited,
-                    pxv, pyv, clr, idxv,
-                    xmin_full, xmax_full, ymin_full, ymax_full,
-                    joinpath(vis.figdir, "full_$(lpad(it, 2, "0")).png"), version=version
-                )
+            # FULL DOMAIN FIGURE
+            make_figure(
+                it, t, dt_plot,
+                xvi, xci,
+                T_buffer, ρg,
+                stokes,
+                Vx_limited, Vy_limited,
+                pxv, pyv, clr, idxv,
+                xmin_full, xmax_full, ymin_full, ymax_full,
+                joinpath(vis.figdir, "full", "full_$(lpad(it, 2, "0")).png"), version=version
+            )
 
-                # ZOOMED FIGURE
-                make_figure(
-                    it, t, dt_plot,
-                    xvi, xci,
-                    T_buffer, ρg,
-                    stokes,
-                    Vx_limited, Vy_limited,
-                    pxv, pyv, clr, idxv,
-                    xmin_zoom, xmax_zoom, ymin_zoom, ymax_zoom,
-                    joinpath(vis.figdir, "zoom_$(lpad(it, 2, "0")).png"), version=version
-                )
+            # ZOOMED FIGURE
+            make_figure(
+                it, t, dt_plot,
+                xvi, xci,
+                T_buffer, ρg,
+                stokes,
+                Vx_limited, Vy_limited,
+                pxv, pyv, clr, idxv,
+                xmin_zoom, xmax_zoom, ymin_zoom, ymax_zoom,
+                joinpath(vis.figdir, "zoom", "zoom_$(lpad(it, 2, "0")).png"), version=version
+            )
             end
         end
         # ------------------------------
@@ -597,7 +626,7 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-version = "v0.274_newresolution_also_v5cmyr"
+version = "v0.294_k=1000"
 println("version is $version")
 # MODEL SETUP
 # n = 256
