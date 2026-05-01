@@ -1,6 +1,6 @@
 # Load script dependencies
 using GeoParams, CairoMakie
-include("../utils/visualisation.jl")
+include("../../../../utils/visualisation.jl")
 
 const isCUDA = true
 
@@ -303,7 +303,7 @@ function main(
     # ----------------------------------------------------
     # Set flags and parameters for visualization and output and create folders for output
     vis = prepare_visualisation(ni, version=version)
-    copy_input_files(vis, setup_file, rheology_file)
+    # copy_input_files(vis, setup_file, rheology_file)
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies()
     dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
@@ -626,7 +626,7 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-version = "v0.294_k=1000"
+version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
 println("version is $version")
 # MODEL SETUP
 # n = 256
