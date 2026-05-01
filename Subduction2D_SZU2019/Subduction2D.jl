@@ -340,7 +340,7 @@ function main(
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    Ttop = 20 + 273
+    Ttop = 0 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
     @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
