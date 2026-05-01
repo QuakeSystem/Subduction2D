@@ -1,6 +1,6 @@
 # Load script dependencies
 using GeoParams, CairoMakie
-include("../../../../utils/visualisation.jl")
+include("../utils/visualisation.jl")
 
 const isCUDA = true
 
@@ -37,7 +37,7 @@ else
 end
 
 # Load file with all the rheology configurations
-setup_file = "Subduction2D_setup_nonuniform.jl"
+setup_file = "Subduction2D_setup.jl"
 rheology_file = "Subduction2D_rheology.jl"
 include(setup_file)
 include(rheology_file)

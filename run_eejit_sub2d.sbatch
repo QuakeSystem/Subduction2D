@@ -9,7 +9,7 @@
 #SBATCH --nodes=1
 #SBATCH -o job.%N.%j.%x.out  # STDOUT
 #SBATCH -e job.%N.%j.%x.err  # STDERR
-#SBATCH --job-name v0.294_k=1000
+#SBATCH --job-name template
 #SBATCH -t 30-00:00:00
 
 
@@ -58,6 +58,6 @@ echo "Current working directory is `pwd`"
 
 echo "  submitting the first job: `date` "
 # julia --project=. ./Original/Subduction2D.jl
-julia --project ./Subduction2D_SZU2019/Subduction2D_nonuniform.jl
-# /scratch/tectonics/GPU4GEO/julia_local/julia_depot/bin/mpiexecjl -n 2 julia --project=. ./Subduction2D_SZU2019/Subduction2D_DYREL.jl
+julia --project ./Subduction2D_SZU2019/Subduction2D.jl
+# /scratch/tectonics/GPU4GEO/julia_local/julia_depot/bin/mpiexecjl -n 2 julia --project=. ./Subduction2D_SZU2019/Subduction2D.jl
 echo "  first job finished: `date` "

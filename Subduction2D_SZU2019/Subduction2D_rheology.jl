@@ -62,7 +62,7 @@ function init_rheologies()
             Phase=2,
             Density=ConstantDensity(; ρ=1.00),
             HeatCapacity=ConstantHeatCapacity(; Cp=1e3),
-            Conductivity=ConstantConductivity(; k=1e-6),
+            Conductivity=ConstantConductivity(; k=1e-10),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),)),
         ),
 
