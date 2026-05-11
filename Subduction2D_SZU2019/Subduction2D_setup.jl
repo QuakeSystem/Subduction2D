@@ -146,6 +146,7 @@ function GMG_subduction_2D_with_coords(
     verbose::Int = 1,
 )
     model_depth = 260.0 # km
+    Tsurface = 20
     Tbot = 1743 - 273.15 # K, 1445 C, from Katsura 2022 # increased by 25 since v0.271 for 260km depth
     x0_km, x1_km = 0.0, 1500.0
     air_thickness = 0.0
@@ -204,7 +205,7 @@ function GMG_subduction_2D_with_coords(
         Grid2D;
         xlim=(854, 940, 1035, 1100, x0_km, x0_km),
         zlim=(-12.5, -35, -80, -112.5, -112.5, -12.5),
-        T=HalfspaceCoolingTemp(Tsurface=0, Tmantle=Tlab, Age=80, Adiabat=0.5)
+        T=HalfspaceCoolingTemp(Tsurface=Tsurface, Tmantle=Tlab, Age=80, Adiabat=0.5)
     )
 
     # Overriding plate temperature, linear geotherm with T0=0 and Tbot=TLab=1300C
@@ -215,7 +216,7 @@ function GMG_subduction_2D_with_coords(
         Grid2D;
         xlim=(954, 854, 940, 1035, 1100, x1_km, x1_km),
         zlim=(-8, -12.5, -35, -80, -112.5, -112.5, -8),
-        T=LinearTemp(Ttop=0, Tbot=Tlab)
+        T=LinearTemp(Ttop=Tsurface, Tbot=Tlab)
     )
 
     # Air temperature, constant zero C.

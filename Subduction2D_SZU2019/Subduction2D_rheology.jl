@@ -61,10 +61,10 @@ function init_rheologies()
             Name="Air",
             Phase=2,
             Density=ConstantDensity(; ρ=1.00),
-            HeatCapacity=ConstantHeatCapacity(; Cp=1e3),
-            Conductivity=ConstantConductivity(; k=1e-13),
+            HeatCapacity=ConstantHeatCapacity(; Cp=5e7),
+            Conductivity=ConstantConductivity(; k=100),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),)),
-        ),
+         ),
 
         # SZU material 12
         #       /Mantle_Weak_zone

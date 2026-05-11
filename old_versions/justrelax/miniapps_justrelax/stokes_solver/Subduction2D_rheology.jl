@@ -75,10 +75,10 @@ function init_rheologies(lithosphere_rheology)
         # Name              = "StickyAir",
         SetMaterialParams(;
             Phase = 4,
-            Density = ConstantDensity(; ρ = 100), # water density
-            HeatCapacity = ConstantHeatCapacity(; Cp = 3.0e3),
-            Conductivity = ConstantConductivity(; k = 1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e19),)),
+        Density           = ConstantDensity(; ρ=1), # water density
+        HeatCapacity      = ConstantHeatCapacity(; Cp = 1e34),
+        Conductivity      = ConstantConductivity(; k  = 3),
+        CompositeRheology = CompositeRheology((LinearViscous(; η=1e19),)),
         ),
     )
 end

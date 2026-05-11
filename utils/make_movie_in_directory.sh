@@ -7,7 +7,7 @@ FRAMERATE=${1:-10}
 FOLDERNAME=$(basename "$PWD")
 MOVIES_DIR="../movies"
 mkdir -p "$MOVIES_DIR"
-OUTPUT="$MOVIES_DIR/${FOLDERNAME}.mp4"
+OUTPUT="$MOVIES_DIR/${FOLDERNAME}_${FRAMERATE}.mp4"
 
 TMPDIR=$(mktemp -d)
 MAX=$(ls *.png | grep -oP '\d+(?=\.png)' | sort -n | tail -1)

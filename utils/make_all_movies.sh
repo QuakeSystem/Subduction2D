@@ -9,10 +9,10 @@ for version_dir in */; do
     # Skip top-level movies folder
     [ "$version_dir" = "movies/" ] && continue
 
-    for fig_dir in "${version_dir}fig_full" "${version_dir}fig_zoom" "${version_dir}full" "${version_dir}zoom"; do
+    for fig_dir in "${version_dir}fig_full" "${version_dir}fig_zoom" "${version_dir}fig_full" "${version_dir}fig_zoom"; do
         if [ -d "$fig_dir" ] && ls "$fig_dir"/*.png 2>/dev/null | grep -q .; then
             FOLDERNAME=$(basename "$fig_dir")
-            MOVIE="${version_dir}movies/${FOLDERNAME}.mp4"
+            MOVIE="${version_dir}movies/${FOLDERNAME}_${FRAMERATE}.mp4"
             if [ -f "$MOVIE" ]; then
                 echo "Skipping $fig_dir (movie already exists)"
                 continue

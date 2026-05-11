@@ -1,17 +1,17 @@
 using Printf
 
-```
+"""
 Extract basic statistics of the solver from a job.*.*out file.
 
 Finds:
 it    itPH  final_err     total_iters  stokes_time(s)  thermal_time(s)
 per iteration and stats over all.
-```
+"""
 function analyse_job(directory=pwd())
 
-    # Find .out files
-    out_files = filter(f -> match(r"^job\..+\.\d+\.out$", basename(f)) !== nothing,
-                       readdir(directory, join=true))
+    # Find .out files - matches job.<node>.<digits>.out OR job.<node>.<digits>.<version>.out
+    out_files = filter(f -> match(r"^job\..+\.out$", basename(f)) !== nothing,
+                   readdir(directory, join=true))
 
     isempty(out_files) && return
 
@@ -19,12 +19,19 @@ function analyse_job(directory=pwd())
         lines = readlines(out_file)
 
         # --- Extract version name ---
-        version_name = nothing
-        for line in lines
-            m = match(r"^version is (.+)$", line)
-            if m !== nothing
-                version_name = strip(m.captures[1])
-                break
+        # Try from filename first: job.<node>.<digits>.<version>.out
+        version_name = let m = match(r"^job\.[^.]+\.\d+\.(.+)\.out$", basename(out_file))
+            m !== nothing ? m.captures[1] : nothing
+        end
+
+        # Fall back to searching log content
+        if version_name === nothing
+            for line in lines
+                m = match(r"^version is (.+)$", line)
+                if m !== nothing
+                    version_name = strip(m.captures[1])
+                    break
+                end
             end
         end
 

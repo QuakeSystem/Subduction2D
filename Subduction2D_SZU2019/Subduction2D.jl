@@ -1,6 +1,6 @@
 # Load script dependencies
 using GeoParams, CairoMakie
-include("../utils/visualisation.jl")
+include("../../../../utils/visualisation.jl")
 
 const isCUDA = true
 
@@ -631,10 +631,10 @@ println("version is $version")
 # MODEL SETUP
 # n = 256
 # nx, ny = n * 4, n
-n = 32
+n = 32*2
 nx, ny = n * 10, round(Int, n * 1.5 * 1.5) # increased vertical size by 50%
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
-ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
+ref_grid = 0 # 0: original uniform grid, 1: non-uniform logistic grid
 
 # GENERATE GRID
 li, origin, phases_GMG, T_GMG, xvi, xci = GMG_subduction_2D_with_coords(
