@@ -305,7 +305,7 @@ function main(
     vis = prepare_visualisation(ni, version=version)
     # copy_input_files(vis, setup_file, rheology_file)
     # Physical properties using GeoParams ----------------
-    rheology = init_rheologies()
+    rheology = init_rheologies_start()
     dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     dt_max = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
@@ -398,7 +398,14 @@ function main(
     # Time loop
     t, it = 0.0, 0
     while it < 1000 # run only for 5 Myrs
-
+        if it == 5
+            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 2.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
+            rheology = init_rheologies()
+        elseif it == 10
+            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 5.0 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
+        elseif it == 15
+            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 7.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
+        end
         # interpolate fields from particle to grid vertices
         particle2grid!(T_buffer, pT, particles)
         @views T_buffer[:, end] .= Ttop
@@ -507,7 +514,7 @@ function main(
         t += dt
 
         ### PARAVIEW PLOTTING
-        if it >= 0 #it == 1 || rem(it, 5) == 0
+        if it == 0 || it == 1 || rem(it, 5) == 0
             # checkpointing_jld2(vis.checkpoint, stokes, thermal, t, dt; it = it)
             # checkpointing_particles(vis.checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
@@ -523,12 +530,17 @@ function main(
                 @views Ry_c[axes(stokes.R.Ry, 1), axes(stokes.R.Ry, 2)] .= Array(stokes.R.Ry)
 
                 data_v = (;
-                    T = Array(T_buffer),
-                    τII = Array(stokes.τ.II),
-                    εII = Array(stokes.ε.II),
-                    Vx = Array(Vx_v),
-                    Vy = Array(Vy_v),
-                    phase_vertex = phase_vertex,
+                    T              = Array(T_buffer),
+                    τII            = Array(stokes.τ.II),
+                    εII            = Array(stokes.ε.II),
+                    Vx             = Array(Vx_v),
+                    Vy             = Array(Vy_v),
+                    phase_vertex   = phase_vertex,
+                    ResT           = Array(thermal.ResT),
+                    log10_absResT  = log10.(abs.(Array(thermal.ResT)) .+ 1e-30),
+                    dτ_ρ           = Array(pt_thermal.dτ_ρ),
+                    log10_dτ_ρ     = log10.(abs.(Array(pt_thermal.dτ_ρ)) .+ 1e-30),
+                    θr_dτ          = Array(pt_thermal.θr_dτ),
                 )
                 data_c = (;
                     P   = Array(stokes.P),

@@ -63,7 +63,7 @@ function init_rheologies()
             Density=ConstantDensity(; ρ=1.00),
             HeatCapacity=ConstantHeatCapacity(; Cp=1e3*2700), # scale with felsic. sed. rock is 2600 but is too different from 3000 oceanic crust
             Conductivity=ConstantConductivity(; k=2.5),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),)),
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
          ),
 
         # SZU material 12
@@ -226,6 +226,140 @@ function init_rheologies()
         ))
 
 end
+
+function init_rheologies_start()
+            # common physical properties
+        α = 2.4e-5 # 1 / K
+        # lambda λ is Pf/Ps, 0.4 for any hydrostatic material, 0.6 for some and 0.95 for weak materials.
+        λ_hydrostatic = 0.4
+        λ_medium = 0.6
+        λ_weak = 0.95
+        ν = 0.45
+        Ψ = 0
+        η_vp = 1e20
+    
+        return rheology = (
+        # SZU material 10
+        #Mantle1_DRY_OL_Ranalli1995
+        SetMaterialParams(; Name="Mantle1_DRY_0",
+            Phase=1,
+            Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.73e0,
+            # #     b=12.93e2,
+            # #     d=4e-6 * 1e-5 * 1e-6,
+            # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
+        ),
+
+        # SZU material 0
+        #       /Air
+        SetMaterialParams(;
+            Name="Air",
+            Phase=2,
+            Density=ConstantDensity(; ρ=1.00),
+            HeatCapacity=ConstantHeatCapacity(; Cp=1e3*2700), # scale with felsic. sed. rock is 2600 but is too different from 3000 oceanic crust
+            Conductivity=ConstantConductivity(; k=2.5),
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
+         ),
+
+        # SZU material 12
+        #       /Mantle_Weak_zone
+        #       Shear_Zone_Mantle4_WET_OL_Ranalli1995
+        SetMaterialParams(; Name="Mantle_Weak_zone",
+            Phase=3, #4, #Making phases contiguous (28 jan, v0.76)
+            Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.73e0,
+            # #     b=12.93e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
+        ),
+
+        # SZU material 7
+        #       Oceanic crust-interface material
+        #       /Hydrated_fractured_top_oceanic_crust_Thrust_Interface
+        #       /Basalts_WET_QUARTZITE_RANALLI_1995
+        SetMaterialParams(; Name="Hydrated_fractured_top_oceanic_crust_Thrust_Interface",
+            Phase=4, #5, #Making phases contiguous (28 jan, v0.76)
+            Density=ConstantDensity(ρ=3000), # Can and should be expanded to PT_Density
+            HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=1.18e0,
+            # #     b=4.74e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
+        ),
+
+        # SZU material 8
+        #       /Oceanic_Crust_(Gabbro)
+        #       /Basic_Crust2_An75_Ranalli1995
+        SetMaterialParams(; Name="Oceanic_Crust_(Gabbro)",
+            Phase=5, # 6, #Making phases contiguous (28 jan, v0.76)
+            Density=ConstantDensity(ρ=3000), # Can and should be expanded to PT_Density
+            HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=1.18e0,
+            # #     b=4.74e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
+        ),
+
+        # SZU material 5/6
+        #       /Felsic_Crust1
+        #       /Felsic_Crust1_WET_QUARTZITE_RANALLI_1995
+        SetMaterialParams(; Name="Felsic_Crust1",
+            Phase=6, # 7, #Making phases contiguous (28 jan, v0.76)
+            Density=ConstantDensity(ρ=2700), # Can and should be expanded to PT_Density
+            HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.64e0,
+            # #     b=8.07e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
+        ),
+
+        # SZU material 3
+        #       /Passive_margin_sediments
+        #       /Sediments2_WET_QUARTZITE_RANALLI_1995
+        SetMaterialParams(; Name="Passive_margin_sediments2",
+            Phase=7, # 9,#Making phases contiguous (28 jan, v0.76)
+            Density=ConstantDensity(ρ=2600), # Can and should be expanded to PT_Density
+            HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.64e0,
+            # #     b=8.07e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
+        ),
+        SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
+            Phase=8,
+            Density=ConstantDensity(; ρ=3250),
+            HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
+            Conductivity=ConstantConductivity(; k=2.5),
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),))
+        ))
+end
+
 
 function init_phases!(phases, phase_grid, particles, xvi)
     ni = size(phases)
