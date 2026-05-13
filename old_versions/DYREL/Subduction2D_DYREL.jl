@@ -50,7 +50,7 @@ end
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup_SZU2019.jl")
-include("Subduction2D_rheology_SZU2019.jl")
+include("Subduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -857,7 +857,7 @@ end
 script_files = [
     basename(@__FILE__),
     "Subduction2D_setup_SZU2019.jl",
-    "Subduction2D_rheology_SZU2019.jl",
+    "Subduction2D_rheology.jl",
 ]
 
 # Ensure the figdir directory exists
