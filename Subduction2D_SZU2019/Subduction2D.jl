@@ -360,7 +360,7 @@ function main(
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     if ref_grid == 0
-        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di_min[2], dims = 2), dims = 2), dims = 2))
     else
         # Lithostatic pressure integrates vertical body force using local cell dy (vertex spacing).
         stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* reshape(grid.di.vertex[2], 1, :), dims = 2), dims = 2), dims = 2))
@@ -636,10 +636,10 @@ println("version is $version")
 # MODEL SETUP
 # n = 256
 # nx, ny = n * 4, n
-n = 32
+n = 32 * 4
 nx, ny = n * 10, round(Int, n * 1.5 * 1.5) # increased vertical size by 50%
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
-ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
+ref_grid = 0 # 0: original uniform grid, 1: non-uniform logistic grid
 
 # GENERATE GRID
 li, origin, phases_GMG, T_GMG, xvi, xci = GMG_subduction_2D_with_coords(
