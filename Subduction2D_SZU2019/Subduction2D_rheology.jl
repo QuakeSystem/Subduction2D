@@ -63,7 +63,7 @@ function init_rheologies()
             Density=ConstantDensity(; ρ=1.00),
             HeatCapacity=ConstantHeatCapacity(; Cp=1e3*2700), # scale with felsic. sed. rock is 2600 but is too different from 3000 oceanic crust
             Conductivity=ConstantConductivity(; k=2.5),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+20),)),
+            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),)),
          ),
 
         # SZU material 12

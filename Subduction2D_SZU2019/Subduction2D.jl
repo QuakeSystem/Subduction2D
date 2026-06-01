@@ -1,7 +1,7 @@
 # Load script dependencies
 using GeoParams, CairoMakie
 
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -73,10 +73,10 @@ function prepare_visualisation(ni; version=nothing)
     pictures = true # set to true to generate PNG figures of particles and fields using Makie
     # IF VTK OUTPUT YES
     pvd_name = "Subduction2D"
-    figdir   = "Subduction2D_SZU2019/Figures/Subduction2D_nonuniform/$version"
+    figdir   = "Subduction2D_SZU2019/Figures/Subduction2D_JRv0.5.1/$version"
     save_particle_points = false # set to true to save particle point clouds as VTK files (can generate large files)
-    vtk_every = 1 # save VTK every N iterations
-    particle_vtk_every = 1 # save particle VTK every N iterations
+    vtk_every = 5 # save VTK every N iterations
+    particle_vtk_every = 5 # save particle VTK every N iterations
 
 
     if do_vtk == true
@@ -307,7 +307,7 @@ function main(
     # ----------------------------------------------------
     # Set flags and parameters for visualization and output and create folders for output
     vis = prepare_visualisation(ni, version=version)
-    copy_input_files(vis, setup_file, rheology_file)
+    # copy_input_files(vis, setup_file, rheology_file)
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies_start()
@@ -323,7 +323,7 @@ function main(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
-    grid_vxi = velocity_grids(xci, xvi, di)
+    # grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
 
