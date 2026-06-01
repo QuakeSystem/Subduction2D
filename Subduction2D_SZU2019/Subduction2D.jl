@@ -1,21 +1,21 @@
 # Load script dependencies
 using GeoParams, CairoMakie
-include("../../../../utils/visualisation.jl")
 
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA
+    include("../../../../utils/visualisation.jl")
+else
+    include("../utils/visualisation.jl")
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-    const backend_JR = CUDABackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-    const backend_JR = CPUBackend
 end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -100,7 +100,7 @@ function copy_input_files(vis, setup, rheology)
     ]
 
     # Ensure the figdir directory exists
-    isdir(vis.figdir) || mkpath(figdir)
+    isdir(vis.figdir) || mkpath(vis.figdir)
 
     # Get the directory of the currently-running script
     basepath = @__DIR__
@@ -274,6 +274,7 @@ function main(
     li,
     origin,
     phases_GMG,
+    T_GMG,
     igg;
     xvi,
     xci,
@@ -303,7 +304,8 @@ function main(
     # ----------------------------------------------------
     # Set flags and parameters for visualization and output and create folders for output
     vis = prepare_visualisation(ni, version=version)
-    # copy_input_files(vis, setup_file, rheology_file)
+    copy_input_files(vis, setup_file, rheology_file)
+
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies_start()
     dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
@@ -317,8 +319,8 @@ function main(
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # grid_vxi = velocity_grids(xci, xvi, di)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
+    grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
 
@@ -343,27 +345,26 @@ function main(
     Ttop = 0 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
+    vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
     thermal_bcs!(thermal, thermal_bc)
-    @views thermal.T[:, end] .= Ttop
-    @views thermal.T[:, 1] .= Tbot
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     if ref_grid == 0
         stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     else
-    # Lithostatic pressure integrates vertical body force using local cell dy (vertex spacing).
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* reshape(di1.vertex[2], 1, :), dims = 2), dims = 2), dims = 2))
+        # Lithostatic pressure integrates vertical body force using local cell dy (vertex spacing).
+        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* reshape(di1.vertex[2], 1, :), dims = 2), dims = 2), dims = 2))
     end
+
     # Rheology
-    args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0 = (T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
@@ -382,13 +383,10 @@ function main(
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer = @zeros(ni .+ 1)
-    Told_buffer = similar(T_buffer)
+    # visualization prep moved to utils/visualisation.jl
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, T_buffer, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
@@ -407,22 +405,18 @@ function main(
             vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 7.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
         end
         # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, particles)
-        @views T_buffer[:, end] .= Ttop
-        @views T_buffer[:, 1] .= Tbot
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        particle2centroid!(T_buffer, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
 
         # Prescribe velocity boxes before solve so solver finds a solution consistent with them
-        apply_vel_boxes!(stokes, grid, vel_boxes_2D)
-        update_halo!(@velocity(stokes)...)
+        # apply_vel_boxes!(stokes, grid, vel_boxes_2D)
+        # update_halo!(@velocity(stokes)...)
 
         # Stokes solver ----------------
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         t_stokes = @elapsed begin
             out = solve_DYREL!(
                 stokes,
@@ -438,13 +432,13 @@ function main(
                 kwargs = (;
                     verbose_PH = true,
                     verbose_DR = true,
-                    iterMax = 50.0e2,
+                    iterMax = 50.0e3,
                     rel_drop = 1.0e-2,
                     nout = 400,
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1.0e-2,
-                    apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
+                    # apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
                     viscosity_cutoff = (1.0e18, 1.0e23),
                 )
             )
@@ -486,8 +480,8 @@ function main(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+        subgrid_diffusion_centroid!(
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -498,8 +492,6 @@ function main(
         move_particles!(particles, particle_args)
         # check if we need to inject particles
         # need stresses on the vertices for injection purposes
-        # center2vertex!(τxx_v, stokes.τ.xx)
-        # center2vertex!(τyy_v, stokes.τ.yy)
         inject_particles_phase!(
             particles,
             pPhases,
@@ -514,14 +506,12 @@ function main(
         t += dt
 
         ### PARAVIEW PLOTTING
-        if it == 0 || it == 1 || rem(it, 5) == 0
-            # checkpointing_jld2(vis.checkpoint, stokes, thermal, t, dt; it = it)
-            # checkpointing_particles(vis.checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+        if it == 1 || rem(it, 5) == 0
+            # checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
+            # checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
             if vis.do_vtk && (it == 1 || rem(it, vis.vtk_every) == 0)
-                Vx_v = vis.Vx_v
-                Vy_v = vis.Vy_v
-                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                velocity2vertex!(vis.Vx_v, vis.Vy_v, @velocity(stokes)...)
                 # Reconstruct compact phase "shapes" on the grid from particle phase ratios.
                 phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
                 Rx_c = zeros(size(stokes.P))
@@ -530,11 +520,10 @@ function main(
                 @views Ry_c[axes(stokes.R.Ry, 1), axes(stokes.R.Ry, 2)] .= Array(stokes.R.Ry)
 
                 data_v = (;
-                    T              = Array(T_buffer),
                     τII            = Array(stokes.τ.II),
                     εII            = Array(stokes.ε.II),
-                    Vx             = Array(Vx_v),
-                    Vy             = Array(Vy_v),
+                    Vx             = Array(vis.Vx_v),
+                    Vy             = Array(vis.Vy_v),
                     phase_vertex   = phase_vertex,
                     ResT           = Array(thermal.ResT),
                     log10_absResT  = log10.(abs.(Array(thermal.ResT)) .+ 1e-30),
@@ -543,15 +532,16 @@ function main(
                     θr_dτ          = Array(pt_thermal.θr_dτ),
                 )
                 data_c = (;
+                    T   = Array(T_buffer),
                     P   = Array(stokes.P),
-                    η   = Array(η_vep),
+                    η_vep   = Array(η_vep),
                     Rx  = Array(Rx_c),
                     Ry  = Array(Ry_c),
                     Rmag = sqrt.(Rx_c .^ 2 .+ Ry_c .^ 2),
                 )
                 velocity_v = (
-                    Array(Vx_v),
-                    Array(Vy_v),
+                    Array(vis.Vx_v),
+                    Array(vis.Vy_v),
                 )
                 path_vtk = joinpath(vis.vtk_dir, "vtk_" * lpad("$it", 6, "0"))
                 save_vtk(
@@ -666,6 +656,7 @@ main(
     li,
     origin,
     phases_GMG,
+    T_GMG,
     igg;
     xvi,
     xci,

@@ -93,9 +93,9 @@ function subduction_nonuniform_coords_1d(
     verbose::Int = 0,
 )
     if ref_grid == 0 || refine_factor == 1.0
-    # Preserve the original type returned by `Geometry` (LinRange/StepRangeLen),
-    # which downstream JustPIC advection currently dispatches on.
-    return LinRange(x0, x1, n_points)
+        # Preserve the original type returned by `Geometry` (LinRange/StepRangeLen),
+        # which downstream JustPIC advection currently dispatches on.
+        return LinRange(x0, x1, n_points)
     end
 
     n_cells = n_points - 1

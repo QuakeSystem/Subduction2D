@@ -12,17 +12,18 @@ function make_figure(
     # Add isotherms
     isotherms_C = [100, 150, 350, 450, 900, 1300]
     isotherms_K = isotherms_C .+ 273
-    Tv = Array(T_buffer)          # (321, 73) 
+    Tc = Array(T_buffer)          # (321, 73) 
     xv = Array(xvi[1]) .* 1e-3   # length 321 (nx+1)
     yv = Array(xvi[2]) .* 1e-3   # length 73  (ny+1)
     xc = Array(xci[1]) .* 1e-3   # length 320 (nx)
     yc = Array(xci[2]) .* 1e-3   # length 72  (ny)
 
-    xi_mask = xmin .≤ xv .≤ xmax
-    yi_mask = ymin .≤ yv .≤ ymax
-    xv_zoom = xv[xi_mask]
-    yv_zoom = yv[yi_mask]
-    Tv_zoom = Tv[xi_mask, yi_mask]
+    xi_mask = xmin .≤ xc .≤ xmax
+    yi_mask = ymin .≤ yc .≤ ymax
+
+    xc_zoom = xc[xi_mask]
+    yc_zoom = yc[yi_mask]
+    Tc_zoom = Tc[xi_mask, yi_mask]
 
 
     ρ  = Array(ustrip.(ρg[2])) ./ 9.81
@@ -80,9 +81,9 @@ function make_figure(
 
     contour!(
         ax1,
-        xv_zoom,
-        yv_zoom,
-        Tv_zoom;
+        xc_zoom,
+        yc_zoom,
+        Tc_zoom;
         levels = isotherms_K,
         labels=false,
         labelsize = 12,
@@ -93,18 +94,18 @@ function make_figure(
     # Temperature
     h2 = heatmap!(
         ax2,
-        xv,
-        yv,
-        Tv,
+        xc,
+        yc,
+        Tc,
         colorrange = (253, 1718),
         colormap = :vik
     )
 
     contour!(
         ax2,
-        xv_zoom,
-        yv_zoom,
-        Tv_zoom;
+        xc_zoom,
+        yc_zoom,
+        Tc_zoom;
         levels = isotherms_K,
         labels=false,
         labelsize = 12,
@@ -176,9 +177,9 @@ function make_figure(
 
     contour!(
         ax7,
-        xv_zoom,
-        yv_zoom,
-        Tv_zoom;
+        xc_zoom,
+        yc_zoom,
+        Tc_zoom;
         levels = isotherms_K,
         labels=false,
         labelsize = 12,
@@ -197,9 +198,9 @@ function make_figure(
     )
     contour!(
         ax8,
-        xv_zoom,
-        yv_zoom,
-        Tv_zoom;
+        xc_zoom,
+        yc_zoom,
+        Tc_zoom;
         levels = isotherms_K,
         labels=false,
         labelsize = 12,
@@ -219,9 +220,9 @@ function make_figure(
     )
     contour!(
         ax9,
-        xv,
-        yv,
-        Tv;
+        xc_zoom,
+        yc_zoom,
+        Tc_zoom;
         levels = isotherms_K,
         labels=false,
         labelsize = 12,
