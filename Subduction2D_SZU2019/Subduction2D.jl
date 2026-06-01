@@ -14,8 +14,10 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    const backend_JR = CUDABackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    const backend_JR = CPUBackend
 end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -286,21 +288,22 @@ function main(
 
     # Physical domain ------------------------------------
     ni = nx, ny           # number of cells
-    di = @. li / ni       # grid steps
-    grid = Geometry(ni, li; origin = origin)
+
     # non-uniform grid with refinement
     if ref_grid == 1
         grid = Geometry(
             PTArray(backend_JR),
             xvi...,
         )
+        di_min =  (min(minimum.(grid.di.center)...),
+        min(minimum.(grid.di.vertex)...))
+    else
+        grid = Geometry(ni, li; origin = origin)
+        di_min = @. li / ni       # grid steps
     end
+    
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    di_min = min(
-        min(minimum.(grid.di.center)...),
-        min(minimum.(grid.di.vertex)...),
-        )
-    di1 = grid.di 
+
     # ----------------------------------------------------
     # Set flags and parameters for visualization and output and create folders for output
     vis = prepare_visualisation(ni, version=version)
@@ -360,7 +363,7 @@ function main(
         stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
     else
         # Lithostatic pressure integrates vertical body force using local cell dy (vertex spacing).
-        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* reshape(di1.vertex[2], 1, :), dims = 2), dims = 2), dims = 2))
+        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* reshape(grid.di.vertex[2], 1, :), dims = 2), dims = 2), dims = 2))
     end
 
     # Rheology
@@ -372,7 +375,7 @@ function main(
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di1.vertex, li; ϵ = 1.0e-8, CFL = 0.95 / √2
+        backend, rheology, phase_ratios, args0, dt, ni, di_min, li; ϵ = 1.0e-8, CFL = 0.95 / √2
     )
 
     # Boundary conditions
@@ -391,7 +394,7 @@ function main(
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di1, dt; ϵ = 1.0e-3)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
 
     # Time loop
     t, it = 0.0, 0
@@ -412,8 +415,8 @@ function main(
         stress2grid!(stokes, pτ, particles)
 
         # Prescribe velocity boxes before solve so solver finds a solution consistent with them
-        # apply_vel_boxes!(stokes, grid, vel_boxes_2D)
-        # update_halo!(@velocity(stokes)...)
+        apply_vel_boxes!(stokes, grid, vel_boxes_2D)
+        update_halo!(@velocity(stokes)...)
 
         # Stokes solver ----------------
         args = (; T = thermal.T, P = stokes.P, dt = Inf)
@@ -438,7 +441,7 @@ function main(
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1.0e-2,
-                    # apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
+                    apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
                     viscosity_cutoff = (1.0e18, 1.0e23),
                 )
             )
@@ -633,10 +636,10 @@ println("version is $version")
 # MODEL SETUP
 # n = 256
 # nx, ny = n * 4, n
-n = 32*2
+n = 32
 nx, ny = n * 10, round(Int, n * 1.5 * 1.5) # increased vertical size by 50%
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
-ref_grid = 0 # 0: original uniform grid, 1: non-uniform logistic grid
+ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
 
 # GENERATE GRID
 li, origin, phases_GMG, T_GMG, xvi, xci = GMG_subduction_2D_with_coords(
