@@ -11,12 +11,12 @@ for dir in */; do
     
     # full figures
     if ls fu*.png 2>/dev/null | grep -q .; then
-        mkdir -p fig_full && mv fu*.png fig_full
+        mkdir -p full && mv fu*.png full
     fi
     
     # zoom figures
     if ls zo*.png 2>/dev/null | grep -q .; then
-        mkdir -p fig_zoom && mv zo*.png fig_zoom
+        mkdir -p zoom && mv zo*.png zoom
     fi
     
     cd ..
