@@ -1,5 +1,6 @@
 using GeophysicalModelGenerator
 using Statistics
+# using Infiltrator
 struct VelBox2D
     cenx::Float64
     cenz::Float64
@@ -146,7 +147,7 @@ function GMG_subduction_2D_with_coords(
     verbose::Int = 1,
 )
     model_depth = 260.0 # km
-    Tsurface = 20
+    Tsurface = 0
     Tbot = 1743 - 273.15 # K, 1445 C, from Katsura 2022 # increased by 25 since v0.271 for 260km depth
     x0_km, x1_km = 0.0, 1500.0
     air_thickness = 0.0
@@ -226,7 +227,7 @@ function GMG_subduction_2D_with_coords(
         Grid2D;
         xlim=(x0_km, x0_km, 854,  954, x1_km, x1_km),
         zlim=(z1_km,-12.5, -12.5,  -8, -8, z1_km),
-        T=ConstantTemp(T=0)
+        T=ConstantTemp(T=Tsurface)
     )
 
     # Mantle temperature, linear geotherm with TLab = 1300 and T = Tbot 1445 C, from Katsura 2022.
@@ -236,7 +237,7 @@ function GMG_subduction_2D_with_coords(
         Grid2D;
         xlim=(x0_km, x1_km),
         zlim=(-model_depth, -112.5),
-        T=LinearTemp(Ttop=Tlab, Tbot=Tbot)
+        T=LinearTemp(Ttop=Tlab, Tbot=Tbot),
     )
 
     #### Material phases described with polygons similar to SZU2019.

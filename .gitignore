@@ -30,6 +30,7 @@ JuliaLocalPreferences.toml
 Subduction2D_SZU2019/Figures/
 utils/jobfile_find_home.jl
 jobfile_leftovers/
+sandbox/
 
 # macOS
 .DS_Store
