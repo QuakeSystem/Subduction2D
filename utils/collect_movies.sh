@@ -1,7 +1,7 @@
 #!/bin/bash
 
-SRC_ROOT="/scratch/tectonics/bert/Subduction2D/Subduction2D_SZU2019/Figures/Subduction2D_JRv0.5.1"
-DST_ROOT="/scratch/tectonics/bert/Subduction2D/Subduction2D_SZU2019/Figures/subduction_movies"
+SRC_ROOT="/scratch/tectonics/bert/Subduction2D/Subduction2D_SZU2019/data/Subduction2D_JRv0.5.1"
+DST_ROOT="/scratch/tectonics/bert/Subduction2D/Subduction2D_SZU2019/data/subduction_movies"
 
 mkdir -p "$DST_ROOT"
 

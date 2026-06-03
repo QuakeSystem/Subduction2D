@@ -27,7 +27,7 @@ Manifest*.toml
 LocalPreferences.toml
 JuliaLocalPreferences.toml
 
-Subduction2D_SZU2019/Figures/
+Subduction2D_SZU2019/data/
 utils/jobfile_find_home.jl
 jobfile_leftovers/
 sandbox/
