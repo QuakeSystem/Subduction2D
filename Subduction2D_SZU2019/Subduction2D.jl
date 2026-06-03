@@ -411,6 +411,18 @@ function main(
         particle2centroid!(T_buffer, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
 
+        # Get flat views of the raw data
+        phases_flat = pPhases.data[:]   # all particle phase values
+        temps_flat  = pT.data[:]        # all particle temperatures
+        index_flat  = particles.index.data[:]  # true = active particle
+        # Find active air particles
+        air_mask = (phases_flat .== 2.0) .& index_flat
+        @show sum(air_mask)
+        @show extrema(temps_flat[air_mask])
+        @show mean(temps_flat[air_mask])   # needs Statistics
+        # Set air particle temperatures to 273 K
+        pT.data[air_mask] .= 273.0
+
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
 
@@ -636,7 +648,7 @@ println("version is $version")
 # MODEL SETUP
 # n = 256
 # nx, ny = n * 4, n
-n = 32
+n = 32*2
 nx, ny = n * 10, round(Int, n * 1.5 * 1.5) # increased vertical size by 50%
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
 ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
