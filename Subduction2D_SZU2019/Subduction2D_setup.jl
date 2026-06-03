@@ -206,7 +206,7 @@ function GMG_subduction_2D_with_coords(
         Grid2D;
         xlim=(854, 940, 1035, 1100, x0_km, x0_km),
         zlim=(-12.5, -35, -80, -112.5, -112.5, -12.5),
-        T=HalfspaceCoolingTemp(Tsurface=Tsurface, Tmantle=Tlab, Age=80, Adiabat=0.5)
+        T=HalfspaceCoolingTemp(Tsurface=Tsurface, Tmantle=Tlab, Age=40, Adiabat=0.5)
     )
 
     # Overriding plate temperature, linear geotherm with T0=0 and Tbot=TLab=1300C

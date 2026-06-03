@@ -48,7 +48,7 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.99*(1-λ_hydrostatic)), # v0.263
+                    ϕ=asind(0.6*(1-λ_hydrostatic)),
                     η_vp=η_vp,
                     Ψ = Ψ
                 )
