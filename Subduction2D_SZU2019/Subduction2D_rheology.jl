@@ -20,7 +20,7 @@ function init_rheologies()
     λ_weak = 0.95
     ν = 0.45
     Ψ = 0
-    η_vp = 1e20
+    η_vp = 1e19
     
     # Cp = 750    # J / kg K
     # Define rheology struct
