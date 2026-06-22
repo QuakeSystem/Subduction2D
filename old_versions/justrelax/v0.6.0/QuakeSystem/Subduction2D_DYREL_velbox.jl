@@ -1,23 +1,19 @@
-# Load script dependencies
-using GeoParams, CairoMakie
-
 const isCUDA = false
 
 @static if isCUDA
     using CUDA
-    include("../../../../utils/visualisation.jl")
-else
-    include("../utils/visualisation.jl")
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+# Load script dependencies
+using GeoParams, GLMakie
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-    const backend_JR = CUDABackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-    const backend_JR = CPUBackend
 end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -39,10 +35,8 @@ else
 end
 
 # Load file with all the rheology configurations
-setup_file = "Subduction2D_setup.jl"
-rheology_file = "Subduction2D_rheology.jl"
-include(setup_file)
-include(rheology_file)
+include("Subduction2D_setup_velbox.jl")
+include("Subduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -64,57 +58,6 @@ end
 # Initial pressure profile - not accurate
 @parallel function init_P!(P, ρg, z)
     @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
-# PREPARE VISUALIZATION SETTINGS
-function prepare_visualisation(ni; version=nothing)
-    # SETTINGS FOR VISUALIZATION AND OUTPUT
-    do_vtk   = true # set to true to generate VTK files for ParaView
-    pictures = true # set to true to generate PNG figures of particles and fields using Makie
-    # IF VTK OUTPUT YES
-    pvd_name = "Subduction2D"
-    figdir   = "Subduction2D_SZU2019/data/Subduction2D_JRv0.5.1/$version"
-    save_particle_points = false # set to true to save particle point clouds as VTK files (can generate large files)
-    vtk_every = 5 # save VTK every N iterations
-    particle_vtk_every = 5 # save particle VTK every N iterations
-
-
-    if do_vtk == true
-        vtk_dir = joinpath(figdir, "vtk")
-        if isfile(joinpath(vtk_dir, "$pvd_name.pvd"))
-            rm(joinpath(vtk_dir, "$pvd_name.pvd"))
-        end
-        take(vtk_dir)
-        checkpoint = joinpath(figdir, "checkpoint")
-        take(checkpoint)
-    end
-    vis=(;do_vtk,vtk_dir,pvd_name ,figdir,save_particle_points,vtk_every,particle_vtk_every,pictures,checkpoint,Vx_v = @zeros(ni .+ 1...), Vy_v = @zeros(ni .+ 1...),)
-
-    return vis
-end
-
-function copy_input_files(vis, setup, rheology)
-    # List of files you want to copy
-    input_files = [
-        basename(@__FILE__),
-        setup,
-        rheology,
-    ]
-
-    # Ensure the figdir directory exists
-    isdir(vis.figdir) || mkpath(vis.figdir)
-
-    # Get the directory of the currently-running script
-    basepath = @__DIR__
-    prefix = "_used_"
-
-    # Copy each script into the figdir folder
-    for f in input_files
-        source = joinpath(basepath, f)
-        name, ext = splitext(f)
-        destination = joinpath(vis.figdir, prefix * name * ext)
-        cp(source, destination; force = true)
-    end
     return nothing
 end
 
@@ -272,45 +215,18 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(
-    li,
-    origin,
-    phases_GMG,
-    T_GMG,
-    igg;
-    xvi,
-    xci,
-    nx = 16,
-    ny = 16,
-    ref_grid = 0,
-    version = nothing,
-)
+function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", do_vtk = false)
 
     # Physical domain ------------------------------------
     ni = nx, ny           # number of cells
-
-    # non-uniform grid with refinement
-    if ref_grid == 1
-        grid = Geometry(
-            PTArray(backend_JR),
-            xvi...,
-        )
-        di_min =  (min(minimum.(grid.di.center)...),
-        min(minimum.(grid.di.vertex)...))
-    else
-        grid = Geometry(ni, li; origin = origin)
-        di_min = @. li / ni       # grid steps
-    end
-    
+    di = @. li / ni       # grid steps
+    grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-
     # ----------------------------------------------------
-    # Set flags and parameters for visualization and output and create folders for output
-    vis = prepare_visualisation(ni, version=version)
-    # copy_input_files(vis, setup_file, rheology_file)
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheologies_start()
+    # rheology = init_rheology_nonNewtonian_plastic()
+    rheology = init_rheology_linear()
     dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     dt_max = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
@@ -323,7 +239,7 @@ function main(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
-    # grid_vxi = velocity_grids(xci, xvi, di)
+    grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
 
@@ -345,7 +261,7 @@ function main(
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    Ttop = 0 + 273
+    Ttop = 20 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
     vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
@@ -359,12 +275,7 @@ function main(
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    if ref_grid == 0
-        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di_min[2], dims = 2), dims = 2), dims = 2))
-    else
-        # Lithostatic pressure integrates vertical body force using local cell dy (vertex spacing).
-        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* reshape(grid.di.vertex[2], 1, :), dims = 2), dims = 2), dims = 2))
-    end
+    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
 
     # Rheology
     args0 = (T = thermal.T, P = stokes.P, dt = Inf)
@@ -375,7 +286,7 @@ function main(
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di_min, li; ϵ = 1.0e-8, CFL = 0.95 / √2
+        backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ = 1.0e-8, CFL = 0.95 / √2
     )
 
     # Boundary conditions
@@ -386,7 +297,23 @@ function main(
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # visualization prep moved to utils/visualisation.jl
+    # IO -------------------------------------------------
+    # if it does not exist, make folder where figures are stored
+    if do_vtk
+        vtk_dir = joinpath(figdir, "vtk")
+        take(vtk_dir)
+        checkpoint = joinpath(figdir, "checkpoint")
+        take(checkpoint)
+    end
+    take(figdir)
+    # ----------------------------------------------------
+
+    local Vx_v, Vy_v
+    if do_vtk
+        Vx_v = @zeros(ni .+ 1...)
+        Vy_v = @zeros(ni .+ 1...)
+    end
+
     T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
@@ -399,29 +326,10 @@ function main(
     # Time loop
     t, it = 0.0, 0
     while it < 1000 # run only for 5 Myrs
-        if it == 5
-            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 2.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
-            rheology = init_rheologies()
-        elseif it == 10
-            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 5.0 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
-        elseif it == 15
-            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 7.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
-        end
-        # interpolate fields from particle to grid vertices
+
+        # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
-
-        # Get flat views of the raw data
-        phases_flat = pPhases.data[:]   # all particle phase values
-        temps_flat  = pT.data[:]        # all particle temperatures
-        index_flat  = particles.index.data[:]  # true = active particle
-        # Find active air particles
-        air_mask = (phases_flat .== 2.0) .& index_flat
-        @show sum(air_mask)
-        @show extrema(temps_flat[air_mask])
-        @show mean(temps_flat[air_mask])   # needs Statistics
-        # Set air particle temperatures to 273 K
-        pT.data[air_mask] .= 273.0
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
@@ -445,16 +353,16 @@ function main(
                 dt,
                 igg;
                 kwargs = (;
-                    verbose_PH = true,
-                    verbose_DR = true,
-                    iterMax = 50.0e2,
+                    verbose_PH = false,
+                    verbose_DR = false,
+                    iterMax = 50.0e3,
                     rel_drop = 1.0e-2,
                     nout = 400,
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1.0e-2,
-                    apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
                     viscosity_cutoff = (1.0e18, 1.0e23),
+                    apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
                 )
             )
         end
@@ -466,8 +374,7 @@ function main(
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, dt)
         # compute time step
-        dt_plot = dt
-        dt = compute_dt(stokes, di_min, dt_max) #* 0.8
+        dt = compute_dt(stokes, di, dt_max)
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
@@ -506,7 +413,6 @@ function main(
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        # need stresses on the vertices for injection purposes
         inject_particles_phase!(
             particles,
             pPhases,
@@ -520,120 +426,75 @@ function main(
         @show it += 1
         t += dt
 
-        ### PARAVIEW PLOTTING
+        # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 5) == 0
-            # checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
-            # checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+            checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
+            checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
-            if vis.do_vtk && (it == 1 || rem(it, vis.vtk_every) == 0)
-                velocity2vertex!(vis.Vx_v, vis.Vy_v, @velocity(stokes)...)
-                # Reconstruct compact phase "shapes" on the grid from particle phase ratios.
-                phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
-                Rx_c = zeros(size(stokes.P))
-                Ry_c = zeros(size(stokes.P))
-                @views Rx_c[axes(stokes.R.Rx, 1), axes(stokes.R.Rx, 2)] .= Array(stokes.R.Rx)
-                @views Ry_c[axes(stokes.R.Ry, 1), axes(stokes.R.Ry, 2)] .= Array(stokes.R.Ry)
-
+            if do_vtk
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    τII            = Array(stokes.τ.II),
-                    εII            = Array(stokes.ε.II),
-                    Vx             = Array(vis.Vx_v),
-                    Vy             = Array(vis.Vy_v),
-                    phase_vertex   = phase_vertex,
-                    ResT           = Array(thermal.ResT),
-                    log10_absResT  = log10.(abs.(Array(thermal.ResT)) .+ 1e-30),
-                    dτ_ρ           = Array(pt_thermal.dτ_ρ),
-                    log10_dτ_ρ     = log10.(abs.(Array(pt_thermal.dτ_ρ)) .+ 1e-30),
-                    θr_dτ          = Array(pt_thermal.θr_dτ),
+                    τII = Array(stokes.τ.II),
+                    εII = Array(stokes.ε.II),
+                    Vx = Array(Vx_v),
+                    Vy = Array(Vy_v),
                 )
                 data_c = (;
-                    T   = Array(T_buffer),
-                    P   = Array(stokes.P),
-                    η_vep   = Array(η_vep),
-                    Rx  = Array(Rx_c),
-                    Ry  = Array(Ry_c),
-                    Rmag = sqrt.(Rx_c .^ 2 .+ Ry_c .^ 2),
+                    P = Array(stokes.P),
+                    T = Array(T_buffer),
+                    η = Array(η_vep),
                 )
                 velocity_v = (
-                    Array(vis.Vx_v),
-                    Array(vis.Vy_v),
+                    Array(Vx_v),
+                    Array(Vy_v),
                 )
-                path_vtk = joinpath(vis.vtk_dir, "vtk_" * lpad("$it", 6, "0"))
                 save_vtk(
-                    path_vtk,
-                    (Array(xvi[1]), Array(xvi[2])),
-                    (Array(xci[1]), Array(xci[2])),
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi,
+                    xci,
                     data_v,
                     data_c,
                     velocity_v;
-                    t = t,
-                    pvd=joinpath(vis.vtk_dir, vis.pvd_name)
+                    t = t
                 )
-                # Optional particle point-cloud output (large files).
-                if vis.save_particle_points && (it == 1 || rem(it, vis.particle_vtk_every) == 0)
-                    save_particles(
-                        particles,
-                        pPhases;
-                        fname = joinpath(vis.vtk_dir, "particles_" * lpad("$it", 6, "0")),
-                        t = t,
-                    )
-                end
-                
-
             end
 
-            if vis.pictures == true
-                # Make particles plottable
-                p = particles.coords
-                ppx, ppy = p
-                pxv = Array(ppx.data[:] ./ 1.0e3)
-                pyv = Array(ppy.data[:] ./ 1.0e3)
-                clr = Array(pPhases.data[:])
-                # clr      = pT.data[:]
-                idxv = Array(particles.index.data[:])
+            # Make particles plottable
+            p = particles.coords
+            ppx, ppy = p
+            pxv = ppx.data[:] ./ 1.0e3
+            pyv = ppy.data[:] ./ 1.0e3
+            clr = pPhases.data[:]
+            # clr      = pT.data[:]
+            idxv = particles.index.data[:]
 
-                # --- New figure: velocity with limited range ---
-                vmin = -0.1 / (365.25 * 24 * 3600)     # -10 cm/yr
-                vmax = +0.1 / (365.25 * 24 * 3600)     # +10 cm/yr
-                velocity2vertex!(vis.Vx_v, vis.Vy_v, @velocity(stokes)...)
-                Vx_limited = clamp.(Array(vis.Vx_v), vmin, vmax)
-                Vy_limited = clamp.(Array(vis.Vy_v), vmin, vmax)
+            # Make Makie figure
+            ar = 3
+            fig = Figure(size = (1200, 900), title = "t = $t")
+            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+            ax2 = Axis(fig[2, 1], aspect = ar, title = "Phase")
+            ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
+            ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
+            # Plot temperature
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), 2:(end - 1)]), colormap = :batlow)
+            # Plot particles phase
+            h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
+            # Plot 2nd invariant of strain rate
+            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
+            # h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
+            # Plot effective viscosity
+            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η)), colormap = :batlow)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax2)
+            hidexdecorations!(ax3)
+            Colorbar(fig[1, 2], h1)
+            Colorbar(fig[2, 2], h2)
+            Colorbar(fig[1, 4], h3)
+            Colorbar(fig[2, 4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
+            fig
+            save(joinpath(figdir, "$(it).png"), fig)
 
-
-                # --- ZOOM REGION ---
-                xmin_zoom, xmax_zoom = 800, 1100
-                ymin_zoom, ymax_zoom = -80, 0
-
-                # --- FULL DOMAIN ---
-                xmin_full = minimum(xvi[1]) * 1.0e-3
-                xmax_full = maximum(xvi[1]) * 1.0e-3
-                ymin_full = minimum(xvi[2]) * 1.0e-3
-                ymax_full = maximum(xvi[2]) * 1.0e-3
-
-            # FULL DOMAIN FIGURE
-            make_figure(
-                it, t, dt_plot,
-                xvi, xci,
-                T_buffer, ρg,
-                stokes,
-                Vx_limited, Vy_limited,
-                pxv, pyv, clr, idxv,
-                xmin_full, xmax_full, ymin_full, ymax_full,
-                joinpath(vis.figdir, "full", "full_$(lpad(it, 2, "0")).png"), version=version
-            )
-
-            # ZOOMED FIGURE
-            make_figure(
-                it, t, dt_plot,
-                xvi, xci,
-                T_buffer, ρg,
-                stokes,
-                Vx_limited, Vy_limited,
-                pxv, pyv, clr, idxv,
-                xmin_zoom, xmax_zoom, ymin_zoom, ymax_zoom,
-                joinpath(vis.figdir, "zoom", "zoom_$(lpad(it, 2, "0")).png"), version=version
-            )
-            end
         end
         # ------------------------------
 
@@ -643,41 +504,16 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-# version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
-version = "test_jun22_gershgorin_patch_v0.5.2"
-println("version is $version")
-# MODEL SETUP
-# n = 256
-# nx, ny = n * 4, n
-n = 32
-nx, ny = n * 10, round(Int, n * 1.5 * 1.5) # increased vertical size by 50%
-# Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
-ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
+do_vtk = true # set to true to generate VTK files for ParaView
+figdir = "Subduction2D_DYREL_velbox"
+n = 64
+nx, ny = n * 2, n
 
-# GENERATE GRID
-li, origin, phases_GMG, T_GMG, xvi, xci = GMG_subduction_2D_with_coords(
-    nx + 1,
-    ny + 1;
-    ref_grid = ref_grid,
-)
-
-# Initialize MPI grid (or not)
+li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
 
-main(
-    li,
-    origin,
-    phases_GMG,
-    T_GMG,
-    igg;
-    xvi,
-    xci,
-    nx = nx,
-    ny = ny,
-    version = version,
-    ref_grid = ref_grid,
-);
+main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
