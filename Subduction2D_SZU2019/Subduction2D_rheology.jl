@@ -20,24 +20,24 @@ function init_rheologies()
     λ_weak = 0.95
     ν = 0.45
     Ψ = 0
-    η_vp = 1e19
+    η_vp = 1
     
     # Cp = 750    # J / kg K
     # Define rheology struct
     return rheology = (
-        # SZU material 10
+                        # SZU material 10
         #Mantle1_DRY_OL_Ranalli1995
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=1,
             Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=0.73e0,
-                b=12.93e2,
-                d=4e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.73e0,
+            # #     b=12.93e2,
+            # #     d=4e-6 * 1e-5 * 1e-6,
+            # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=6.7e10, ν = ν),
                 DislocationCreep(;
@@ -48,13 +48,12 @@ function init_rheologies()
                 ),
                 DruckerPrager_regularised(;
                     C=1e7,
-                    ϕ=asind(0.6*(1-λ_hydrostatic)),
+                    ϕ=asind(0.6*(1-λ_hydrostatic)), # v0.263
                     η_vp=η_vp,
                     Ψ = Ψ
                 )
             )),
         ),
-
         # SZU material 0
         #       /Air
         SetMaterialParams(;
@@ -73,13 +72,13 @@ function init_rheologies()
             Phase=3, #4, #Making phases contiguous (28 jan, v0.76)
             Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=0.73e0,
-                b=12.93e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.73e0,
+            # #     b=12.93e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=6.7e10, ν = ν),
                 DislocationCreep(;
@@ -105,13 +104,13 @@ function init_rheologies()
             Phase=4, #5, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=3000), # Can and should be expanded to PT_Density
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=1.18e0,
-                b=4.74e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=1.18e0,
+            # #     b=4.74e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
@@ -135,13 +134,13 @@ function init_rheologies()
             Phase=5, # 6, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=3000), # Can and should be expanded to PT_Density
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=1.18e0,
-                b=4.74e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=1.18e0,
+            # #     b=4.74e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
@@ -165,13 +164,13 @@ function init_rheologies()
             Phase=6, # 7, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=2700), # Can and should be expanded to PT_Density
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=0.64e0,
-                b=8.07e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.64e0,
+            # #     b=8.07e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
@@ -195,13 +194,13 @@ function init_rheologies()
             Phase=7, # 9,#Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=2600), # Can and should be expanded to PT_Density
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=0.64e0,
-                b=8.07e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.64e0,
+            # #     b=8.07e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=1.0e10, ν = ν),
                 DislocationCreep(;
@@ -223,8 +222,8 @@ function init_rheologies()
             HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
             Conductivity=ConstantConductivity(; k=2.5),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),))
-        ))
-
+            )
+    )
 end
 
 function init_rheologies_start()
@@ -245,16 +244,15 @@ function init_rheologies_start()
             Phase=1,
             Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=0.73e0,
-                b=12.93e2,
-                d=4e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.73e0,
+            # #     b=12.93e2,
+            # #     d=4e-6 * 1e-5 * 1e-6,
+            # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
-        ),
-
+        )
         # SZU material 0
         #       /Air
         SetMaterialParams(;
@@ -273,13 +271,13 @@ function init_rheologies_start()
             Phase=3, #4, #Making phases contiguous (28 jan, v0.76)
             Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=0.73e0,
-                b=12.93e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.73e0,
+            # #     b=12.93e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
 
@@ -291,13 +289,13 @@ function init_rheologies_start()
             Phase=4, #5, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=3000), # Can and should be expanded to PT_Density
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=1.18e0,
-                b=4.74e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=1.18e0,
+            # #     b=4.74e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
 
@@ -308,13 +306,13 @@ function init_rheologies_start()
             Phase=5, # 6, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=3000), # Can and should be expanded to PT_Density
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=1.18e0,
-                b=4.74e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=1.18e0,
+            # #     b=4.74e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
 
@@ -325,13 +323,13 @@ function init_rheologies_start()
             Phase=6, # 7, #Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=2700), # Can and should be expanded to PT_Density
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=0.64e0,
-                b=8.07e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.64e0,
+            # #     b=8.07e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
 
@@ -342,13 +340,13 @@ function init_rheologies_start()
             Phase=7, # 9,#Making phases contiguous (28 jan, v0.76)
             Density=ConstantDensity(ρ=2600), # Can and should be expanded to PT_Density
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
-            # Conductivity=ConstantConductivity(; k=2.5),
-            Conductivity=TP_Conductivity(;
-                a=0.64e0,
-                b=8.07e2,
-                d=4.00e-6 * 1e-5 * 1e-6,
-            ),
-            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
+            Conductivity=ConstantConductivity(; k=2.5),
+            # # Conductivity=TP_Conductivity(;
+            # #     a=0.64e0,
+            # #     b=8.07e2,
+            # #     d=4.00e-6 * 1e-5 * 1e-6,
+            # # ),
+            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
         SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
@@ -357,7 +355,8 @@ function init_rheologies_start()
             HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
             Conductivity=ConstantConductivity(; k=2.5),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),))
-        ))
+        ),
+        )
 end
 
 

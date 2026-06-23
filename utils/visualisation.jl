@@ -10,7 +10,7 @@ function make_figure(
     )
 
     # Add isotherms
-    isotherms_C = [100, 150, 350, 450, 900, 1300]
+    isotherms_C = [10, 100, 150, 350, 450, 900, 1300]
     isotherms_K = isotherms_C .+ 273
     Tc = Array(T_buffer)          # (321, 73) 
     xv = Array(xvi[1]) .* 1e-3   # length 321 (nx+1)
@@ -34,11 +34,11 @@ function make_figure(
     vmax = +0.1 / (365.25 * 24 * 3600)
 
     # Custom color range for viscosity
-    visc_min = log10(1.0e18)
-    visc_max = log10(1.0e24)
+    visc_min = log10(1.0e17)
+    visc_max = log10(1.0e25)
 
     # Custom color range for strain rate
-    ε_min = -16
+    ε_min = -15
     ε_max = -12
 
     # Convert time to Myr and dt to Kyr for the title

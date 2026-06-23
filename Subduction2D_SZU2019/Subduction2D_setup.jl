@@ -1,6 +1,5 @@
 using GeophysicalModelGenerator
 using Statistics
-# using Infiltrator
 struct VelBox2D
     cenx::Float64
     cenz::Float64
@@ -83,7 +82,7 @@ function logistic_vertices(
 end
 
 function subduction_nonuniform_coords_1d(
-    n_points::Int,
+    n_vertices::Int,
     x0::Float64,
     x1::Float64;
     ref_grid::Int,
@@ -94,12 +93,12 @@ function subduction_nonuniform_coords_1d(
     verbose::Int = 0,
 )
     if ref_grid == 0 || refine_factor == 1.0
-        # Preserve the original type returned by `Geometry` (LinRange/StepRangeLen),
-        # which downstream JustPIC advection currently dispatches on.
-        return LinRange(x0, x1, n_points)
+    # Preserve the original type returned by `Geometry` (LinRange/StepRangeLen),
+    # which downstream JustPIC advection currently dispatches on.
+    return LinRange(x0, x1, n_vertices)
     end
 
-    n_cells = n_points - 1
+    n_cells = n_vertices - 1
     L = x1 - x0
     x_center = x0 + x_center_frac * L
     w_ref = w_ref_ratio * abs(L)
@@ -133,8 +132,8 @@ needed by the DYREL grid setup:
 `xvi` (staggered/vertex coordinates) and `xci` (cell-center coordinates) in meters.
 """
 function GMG_subduction_2D_with_coords(
-    nx_points::Int,
-    ny_points::Int;
+    nx_vertices::Int,
+    ny_vertices::Int;
     ref_grid::Int = 0,
     refine_factor_x::Float64 = 30.0,
     refine_factor_y::Float64 = 10.0,
@@ -147,15 +146,16 @@ function GMG_subduction_2D_with_coords(
     verbose::Int = 1,
 )
     model_depth = 260.0 # km
-    Tsurface = 0
+    Tsurface = 20
     Tbot = 1743 - 273.15 # K, 1445 C, from Katsura 2022 # increased by 25 since v0.271 for 260km depth
     x0_km, x1_km = 0.0, 1500.0
     air_thickness = 0.0
     z0_km, z1_km = -model_depth * 1.0, air_thickness
+    cycle_materials = 0
 
-    # Our coordinate arrays are "points" for CartData: xvi has length nx_points.
+    # Our coordinate arrays are "points" for CartData: xvi has length nx_vertices.
     x = subduction_nonuniform_coords_1d(
-        nx_points,
+        nx_vertices,
         x0_km,
         x1_km;
         ref_grid = ref_grid,
@@ -166,7 +166,7 @@ function GMG_subduction_2D_with_coords(
         verbose = verbose,
     )
     z = subduction_nonuniform_coords_1d(
-        ny_points,
+        ny_vertices,
         z0_km,
         z1_km;
         ref_grid = ref_grid,
@@ -180,8 +180,8 @@ function GMG_subduction_2D_with_coords(
     Grid2D = CartData(xyz_grid(x, 0, z))
 
     # Phases and temperature on the CartData grid points ------------------
-    Phases = zeros(Int64, nx_points, 1, ny_points)
-    Temp = fill(Tbot, nx_points, 1, ny_points)
+    Phases = zeros(Int64, nx_vertices, 1, ny_vertices)
+    Temp = fill(Tbot, nx_vertices, 1, ny_vertices)
     Tlab = 1300
 
 
@@ -206,7 +206,7 @@ function GMG_subduction_2D_with_coords(
         Grid2D;
         xlim=(854, 940, 1035, 1100, x0_km, x0_km),
         zlim=(-12.5, -35, -80, -112.5, -112.5, -12.5),
-        T=HalfspaceCoolingTemp(Tsurface=Tsurface, Tmantle=Tlab, Age=40, Adiabat=0.5)
+        T=HalfspaceCoolingTemp(Tsurface=Tsurface, Tmantle=Tlab, Age=80, Adiabat=0.5)
     )
 
     # Overriding plate temperature, linear geotherm with T0=0 and Tbot=TLab=1300C
@@ -227,7 +227,7 @@ function GMG_subduction_2D_with_coords(
         Grid2D;
         xlim=(x0_km, x0_km, 854,  954, x1_km, x1_km),
         zlim=(z1_km,-12.5, -12.5,  -8, -8, z1_km),
-        T=ConstantTemp(T=Tsurface)
+        T=ConstantTemp(T=0)
     )
 
     # Mantle temperature, linear geotherm with TLab = 1300 and T = Tbot 1445 C, from Katsura 2022.
@@ -237,7 +237,7 @@ function GMG_subduction_2D_with_coords(
         Grid2D;
         xlim=(x0_km, x1_km),
         zlim=(-model_depth, -112.5),
-        T=LinearTemp(Ttop=Tlab, Tbot=Tbot),
+        T=LinearTemp(Ttop=Tlab, Tbot=Tbot)
     )
 
     #### Material phases described with polygons similar to SZU2019.
@@ -403,8 +403,8 @@ function GMG_subduction_2D_with_coords(
     T = Temp[:, 1, :] .+ 273
 
     # Staggered grid coordinate vectors in meters:
-    # - xvi are vertices (length nx_points)
-    # - xci are cell centers (length nx_points-1)
+    # - xvi are vertices (length nx_vertices)
+    # - xci are cell centers (length nx_vertices-1)
     xvi = (x .* 1.0e3, z .* 1.0e3)
     xci = (
         0.5 .* (x[1:end-1] .+ x[2:end]) .* 1.0e3,
