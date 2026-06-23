@@ -1,13 +1,14 @@
-# Load script dependencies
-using GeoParams, CairoMakie
-
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA
 end
- 
+
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+# Load script dependencies
+using GeoParams, GLMakie
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -60,7 +61,7 @@ end
     return nothing
 end
 
-
+# VELOCITY BOXES ROUTINES
 @parallel_indices (i, j) function _apply_vel_box_Vx!(
     Vx,
     xvx,
@@ -149,21 +150,20 @@ end
     return nothing
 end
 
-# Velocity boxes are applied on the same staggered grid as the Stokes solver:
-# - Vx lives at (x face, z) with size (ni[1]+1, ni[2]+2); grid_vx = (xvi[1], yVx).
-# - Vy lives at (x, z face) with size (ni[1]+2, ni[2]+1); grid_vy = (xVy, xvi[2]).
-# There are no separate "cell-center" or "vertex" velocity arrays; Vx and Vy are the
-# only velocity DoFs, and apply_vel_boxes! correctly uses grid.grid_v so the box
-# region is applied to the right indices.
+# Velocity boxes are applied on the same staggered coordinates as the Stokes solver.
+# In the new Geometry API these coordinates are stored in `grid.xi_vel`:
+# - `grid.xi_vel[1]` are the coordinates for Vx (x-face, z)
+# - `grid.xi_vel[2]` are the coordinates for Vy (x, z-face)
+# so the box region is applied to the correct velocity DoFs.
 function apply_vel_boxes!(
     stokes,
-    grid::Geometry{2, T},
+    grid,
     boxes::Vector{VelBox2D},
-) where {T}
+)
     isempty(boxes) && return nothing
 
     Vx, Vy = @velocity(stokes)
-    grid_vx, grid_vy = grid.grid_v
+    grid_vx, grid_vy = grid.xi_vel
     xvx, yvx = grid_vx
     xvy, yvy = grid_vy
 
@@ -225,7 +225,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheology_nonNewtonian_plastic()
+    # rheology = init_rheology_nonNewtonian_plastic()
+    rheology = init_rheology_linear()
     dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     dt_max = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
@@ -235,10 +236,9 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
@@ -252,7 +252,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     phases_device = PTArray(backend)(phases_GMG)
     phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, phases_device, particles, xvi)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -264,23 +264,21 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     Ttop = 20 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
+    vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
     thermal_bcs!(thermal, thermal_bc)
-    @views thermal.T[:, end] .= Ttop
-    @views thermal.T[:, 1] .= Tbot
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
 
     # Rheology
-    args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0 = (T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
@@ -316,43 +314,32 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = @zeros(ni .+ 1)
-    Told_buffer = similar(T_buffer)
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    centroid2particle!(pT, T_buffer, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-3)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
 
     # Time loop
     t, it = 0.0, 0
-    while it < 160 #000 # run only for 5 Myrs
+    while it < 1000 # run only for 5 Myrs
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= Ttop
-        @views T_buffer[:, 1] .= Tbot
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
 
         # interpolate stress back to the grid
-        stress2grid!(stokes, pτ, xvi, xci, particles)
+        stress2grid!(stokes, pτ, particles)
 
         # Prescribe velocity boxes before solve so solver finds a solution consistent with them
         apply_vel_boxes!(stokes, grid, vel_boxes_2D)
         update_halo!(@velocity(stokes)...)
 
-        # Stokes solver: re-apply velocity boxes after every V update so the solver
-        # keeps the prescribed velocities in the box (otherwise each iteration overwrites them).
-
         # Stokes solver ----------------
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         t_stokes = @elapsed begin
             out = solve_DYREL!(
                 stokes,
@@ -362,7 +349,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 phase_ratios,
                 rheology,
                 args,
-                di,
+                grid,
                 dt,
                 igg;
                 kwargs = (;
@@ -379,19 +366,15 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 )
             )
         end
-
-        # Enforce velocity boxes again so the final velocity field (used for advection) matches the prescription
-        apply_vel_boxes!(stokes, grid, vel_boxes_2D)
-        update_halo!(@velocity(stokes)...)
         # print some stuff
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
 
         # rotate stresses
-        rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+        rotate_stress!(pτ, stokes, particles, dt)
         # compute time step
-        dt = compute_dt(stokes, di, dt_max) #* 0.8
+        dt = compute_dt(stokes, di, dt_max)
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
@@ -406,7 +389,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,
@@ -416,63 +399,50 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-        subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi, di, dt
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        subgrid_diffusion_centroid!(
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        # need stresses on the vertices for injection purposes
-        # center2vertex!(τxx_v, stokes.τ.xx)
-        # center2vertex!(τyy_v, stokes.τ.yy)
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
-            xvi
+            (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy)
         )
 
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt
 
         # Data I/O and plotting ---------------------
         if it == 1 || rem(it, 5) == 0
-            # checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
-            # checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+            checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
+            checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
             (; η_vep, η) = stokes.viscosity
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-                # map staggered residuals Rx, Ry to a cell-centered array matching P
-                Rx_c = zeros(size(stokes.P))
-                Ry_c = zeros(size(stokes.P))
-                @views Rx_c[axes(stokes.R.Rx, 1), axes(stokes.R.Rx, 2)] .= Array(stokes.R.Rx)
-                @views Ry_c[axes(stokes.R.Ry, 1), axes(stokes.R.Ry, 2)] .= Array(stokes.R.Ry)
-
                 data_v = (;
-                    T = Array(T_buffer),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
                     Vx = Array(Vx_v),
                     Vy = Array(Vy_v),
                 )
                 data_c = (;
-                    P   = Array(stokes.P),
-                    η   = Array(η_vep),
-                    Rx  = Rx_c,
-                    Ry  = Ry_c,
-                    Rmag = sqrt.(Rx_c .^ 2 .+ Ry_c .^ 2),
+                    P = Array(stokes.P),
+                    T = Array(T_buffer),
+                    η = Array(η_vep),
                 )
                 velocity_v = (
                     Array(Vx_v),
@@ -506,14 +476,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :batlow)
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), 2:(end - 1)]), colormap = :batlow)
             # Plot particles phase
             h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 1)
             # Plot 2nd invariant of strain rate
-            # h3  = heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
-            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
+            h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.ε.II)), colormap = :batlow)
+            # h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array((stokes.τ.II)), colormap = :batlow)
             # Plot effective viscosity
-            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
+            h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(log10.(stokes.viscosity.η)), colormap = :batlow)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)

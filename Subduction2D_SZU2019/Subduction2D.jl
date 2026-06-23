@@ -386,7 +386,7 @@ function main(
     update_halo!(@velocity(stokes)...)
 
     # visualization prep moved to utils/visualisation.jl
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
 
@@ -639,7 +639,8 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
+# version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
+version = "test_jun22_gershgorin_patch_v0.5.2"
 println("version is $version")
 # MODEL SETUP
 # n = 256
