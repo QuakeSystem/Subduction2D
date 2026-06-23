@@ -639,8 +639,8 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-# version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
-version = "test_jun22_gershgorin_patch_v0.5.2"
+version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
+# version = "v0.357_baseline_troubleshooting"
 println("version is $version")
 # MODEL SETUP
 # n = 256

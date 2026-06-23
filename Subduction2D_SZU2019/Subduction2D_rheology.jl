@@ -252,7 +252,7 @@ function init_rheologies_start()
             # ),
             # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
-        )
+        ),
         # SZU material 0
         #       /Air
         SetMaterialParams(;
