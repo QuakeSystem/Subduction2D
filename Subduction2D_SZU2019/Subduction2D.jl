@@ -386,7 +386,7 @@ function main(
     update_halo!(@velocity(stokes)...)
 
     # visualization prep moved to utils/visualisation.jl
-    T_buffer = @view thermal.T[2:(end - 1), 2:(end - 1)]
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
 
@@ -406,21 +406,22 @@ function main(
         elseif it == 15
             vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 7.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
         end
-        # interpolate fields from particle to grid vertices
-        particle2centroid!(T_buffer, pT, particles)
-        thermal_bcs!(thermal, thermal_bc)
-
         # Get flat views of the raw data
         phases_flat = pPhases.data[:]   # all particle phase values
         temps_flat  = pT.data[:]        # all particle temperatures
         index_flat  = particles.index.data[:]  # true = active particle
         # Find active air particles
-        air_mask = (phases_flat .== 1.0) .& index_flat
+        air_mask = (phases_flat .== 2.0) .& index_flat
         @show sum(air_mask)
         @show extrema(temps_flat[air_mask])
         @show mean(temps_flat[air_mask])   # needs Statistics
         # Set air particle temperatures to 273 K
         pT.data[air_mask] .= 273.0
+
+        # interpolate fields from particle to grid vertices
+        particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:end-1, 2:end-1] .= T_buffer
+        thermal_bcs!(thermal, thermal_bc)
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
@@ -515,8 +516,6 @@ function main(
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-        @show it += 1
-        t += dt
 
         ### PARAVIEW PLOTTING
         # if it == 1 || rem(it, 25) == 0
@@ -545,13 +544,35 @@ function main(
                 θr_dτ          = Array(pt_thermal.θr_dτ),
             )
             data_c = (;
-                T   = Array(T_buffer),
+                T_buffer   = Array(T_buffer),
+                thermal_T = Array(thermal.T[2:end-1,2:end-1]),
                 P   = Array(stokes.P),
+                P0   = Array(stokes.P0),
+                density = Array(ustrip.(ρg[2]) ./ 9.81),
+                divV   = Array(stokes.∇V),
                 η_vep   = Array(η_vep),
-                dens = Array(ustrip.(ρg[2]) ./ 9.81),
                 Rx  = Array(Rx_c),
                 Ry  = Array(Ry_c),
                 Rmag = sqrt.(Rx_c .^ 2 .+ Ry_c .^ 2),
+                log10_η     = log10.(Array(stokes.viscosity.η)),
+                log10_η_vep = log10.(Array(stokes.viscosity.η_vep)),
+                λ         = Array(stokes.λ),
+                EII_pl    = Array(stokes.EII_pl),
+                EVol_pl   = Array(stokes.EVol_pl),
+                ε_vol_pl  = Array(stokes.ε_vol_pl),
+                ΔPψ = Array(stokes.ΔPψ)
+                τxx = Array(stokes.τ.xx),
+                τyy = Array(stokes.τ.yy),
+                τxy = Array(stokes.τ.xy_c),
+                εxx = Array(stokes.ε.xx),
+                εyy = Array(stokes.ε.yy),
+                εxy = Array(stokes.ε.xy_c),
+                εII = Array(stokes.ε.II),
+                ΔT            = Array(thermal.ΔT[2:end-1,2:end-1]),
+                adiabatic     = Array(thermal.adiabatic),
+                dT_dt         = Array(thermal.dT_dt),
+                H             = Array(thermal.H),
+                shear_heating = Array(thermal.shear_heating),
             )
             velocity_v = (
                 Array(vis.Vx_v),
@@ -633,6 +654,8 @@ function main(
                 joinpath(vis.figdir, "zoom", "zoom_$(lpad(it, 2, "0")).png"), version=version
             )
         end
+        @show it += 1
+        t += dt
     end
         # ------------------------------
     return nothing
@@ -640,11 +663,10 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
-# version = "v0.357_baseline_troubleshooting"
+# version = "v0.357_computedensfix_interactivenode"
 println("version is $version")
+
 # MODEL SETUP
-# n = 256
-# nx, ny = n * 4, n
 n = 32
 nx, ny = n * 10, round(Int, n * 1.5 * 1.5) # increased vertical size by 50%
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)

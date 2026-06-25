@@ -30,6 +30,7 @@ function init_rheologies()
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=1,
             Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            # Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=ConstantConductivity(; k=2.5),
             # # Conductivity=TP_Conductivity(;
@@ -37,7 +38,7 @@ function init_rheologies()
             # #     b=12.93e2,
             # #     d=4e-6 * 1e-5 * 1e-6,
             # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=6.7e10, ν = ν),
                 DislocationCreep(;
@@ -78,7 +79,7 @@ function init_rheologies()
             # #     b=12.93e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=6.7e10, ν = ν),
                 DislocationCreep(;
@@ -110,7 +111,7 @@ function init_rheologies()
             # #     b=4.74e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
@@ -140,7 +141,7 @@ function init_rheologies()
             # #     b=4.74e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
@@ -170,7 +171,7 @@ function init_rheologies()
             # #     b=8.07e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=2.5e10, ν = ν),
                 DislocationCreep(;
@@ -200,7 +201,7 @@ function init_rheologies()
             # #     b=8.07e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((
                 ConstantElasticity(; G=1.0e10, ν = ν),
                 DislocationCreep(;
@@ -243,6 +244,7 @@ function init_rheologies_start()
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=1,
             Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            # Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=ConstantConductivity(; k=2.5),
             # # Conductivity=TP_Conductivity(;
@@ -250,7 +252,7 @@ function init_rheologies_start()
             # #     b=12.93e2,
             # #     d=4e-6 * 1e-5 * 1e-6,
             # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20E-08), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
         # SZU material 0
@@ -277,7 +279,7 @@ function init_rheologies_start()
             # #     b=12.93e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.20e-08), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
 
@@ -295,7 +297,7 @@ function init_rheologies_start()
             # #     b=4.74e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
 
@@ -312,7 +314,7 @@ function init_rheologies_start()
             # #     b=4.74e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=0.25e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
 
@@ -329,7 +331,7 @@ function init_rheologies_start()
             # #     b=8.07e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=1.00e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
 
@@ -346,7 +348,7 @@ function init_rheologies_start()
             # #     b=8.07e2,
             # #     d=4.00e-6 * 1e-5 * 1e-6,
             # # ),
-            # RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
+            RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
         ),
         SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition

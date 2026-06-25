@@ -57,6 +57,9 @@ echo "Running on hosts: $SLURM_NODELIST"
 echo "Current working directory is `pwd`"
 
 echo "  submitting the first job: `date` "
+# Enable below to enforce recompiling
+# rm -rf /scratch/tectonics/bert/julia_local/julia_depot/compiled/v1.*/JustRelax*
+
 # julia --project=. ./Original/Subduction2D.jl
 julia --project ./Subduction2D_SZU2019/Subduction2D.jl
 # /scratch/tectonics/GPU4GEO/julia_local/julia_depot/bin/mpiexecjl -n 2 julia --project=. ./Subduction2D_SZU2019/Subduction2D.jl

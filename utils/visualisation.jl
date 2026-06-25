@@ -66,7 +66,7 @@ function make_figure(
     ax5 = Axis(fig[2, 3], aspect = ar, title = "Vy [m/s]")
     ax6 = Axis(fig[3, 3], aspect = ar, title = "log10(τII) [Pa]")
     ax7 = Axis(fig[1, 5], aspect = ar, title = "log10(εII)")
-    ax8 = Axis(fig[2, 5], aspect = ar, title = "log10(εII_pl)")
+    ax8 = Axis(fig[2, 5], aspect = ar, title = "log10(η)")
     ax9 = Axis(fig[3, 5], aspect = ar, title = "log10(η_vep)")
 
     # Apply zoom limits
@@ -187,14 +187,13 @@ function make_figure(
         linewidth = 1.0
     )
 
-    # plastic strain rate
+    # viscosity
     h8 = heatmap!(
         ax8,
         xc,
         yc,
-        Array(log10.(stokes.EII_pl));
+        Array(log10.(stokes.viscosity.η));
         colormap = :vik,
-        colorrange = (ε_min, ε_max)
     )
     contour!(
         ax8,
