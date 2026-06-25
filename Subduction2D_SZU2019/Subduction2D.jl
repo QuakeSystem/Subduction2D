@@ -560,7 +560,7 @@ function main(
                 EII_pl    = Array(stokes.EII_pl),
                 EVol_pl   = Array(stokes.EVol_pl),
                 ε_vol_pl  = Array(stokes.ε_vol_pl),
-                ΔPψ = Array(stokes.ΔPψ)
+                ΔPψ = Array(stokes.ΔPψ),
                 τxx = Array(stokes.τ.xx),
                 τyy = Array(stokes.τ.yy),
                 τxy = Array(stokes.τ.xy_c),
