@@ -380,7 +380,7 @@ function GMG_subduction_2D_with_coords(
         xlim=(x0_km,x0_km+10),
         zlim=(-100, 0),
         phase=ConstantPhase(8),
-        T=LinearTemp(Ttop=200, Tbot=Tlab+200)
+        T=LinearTemp(Ttop=0, Tbot=Tlab)
         
     )
     add_vel_box!(

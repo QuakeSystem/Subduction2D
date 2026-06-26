@@ -29,8 +29,8 @@ function init_rheologies()
         #Mantle1_DRY_OL_Ranalli1995
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=1,
-            Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
-            # Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
+            # Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=ConstantConductivity(; k=2.5),
             # # Conductivity=TP_Conductivity(;
@@ -71,7 +71,8 @@ function init_rheologies()
         #       Shear_Zone_Mantle4_WET_OL_Ranalli1995
         SetMaterialParams(; Name="Mantle_Weak_zone",
             Phase=3, #4, #Making phases contiguous (28 jan, v0.76)
-            Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            # Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=ConstantConductivity(; k=2.5),
             # # Conductivity=TP_Conductivity(;
@@ -219,7 +220,7 @@ function init_rheologies()
             ),
         SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
             Phase=8,
-            Density=ConstantDensity(; ρ=3250),
+            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
             Conductivity=ConstantConductivity(; k=2.5),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),))
@@ -243,8 +244,8 @@ function init_rheologies_start()
         #Mantle1_DRY_OL_Ranalli1995
         SetMaterialParams(; Name="Mantle1_DRY_0",
             Phase=1,
-            Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
-            # Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
+            # Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=ConstantConductivity(; k=2.5),
             # # Conductivity=TP_Conductivity(;
@@ -271,7 +272,8 @@ function init_rheologies_start()
         #       Shear_Zone_Mantle4_WET_OL_Ranalli1995
         SetMaterialParams(; Name="Mantle_Weak_zone",
             Phase=3, #4, #Making phases contiguous (28 jan, v0.76)
-            Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            # Density = PT_Density(; ρ0 = 3.3e3, α = α, β = 0/kbar, T0 = 20C),
+            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.00e3),
             Conductivity=ConstantConductivity(; k=2.5),
             # # Conductivity=TP_Conductivity(;
@@ -353,7 +355,8 @@ function init_rheologies_start()
         ),
         SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
             Phase=8,
-            Density=ConstantDensity(; ρ=3250),
+            # Density=ConstantDensity(; ρ=3250),
+            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
             HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
             Conductivity=ConstantConductivity(; k=2.5),
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),))

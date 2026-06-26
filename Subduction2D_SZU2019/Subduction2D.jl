@@ -72,10 +72,10 @@ function prepare_visualisation(ni; version=nothing)
     pictures = true # set to true to generate PNG figures of particles and fields using Makie
     # IF VTK OUTPUT YES
     pvd_name = "Subduction2D"
-    figdir   = "Subduction2D_SZU2019/data/Subduction2D_JRv0.5.1/$version"
+    figdir   = "Subduction2D_SZU2019/data/Subduction2D_JRv0.6.0/$version"
     save_particle_points = false # set to true to save particle point clouds as VTK files (can generate large files)
-    vtk_every = 5 # save VTK every N iterations
-    particle_vtk_every = 5 # save particle VTK every N iterations
+    vtk_every = 25 # save VTK every N iterations
+    particle_vtk_every = 25 # save particle VTK every N iterations
 
 
     if do_vtk == true

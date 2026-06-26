@@ -34,7 +34,9 @@
 
 module purge
 module load development
+# Loads needed modules for cpu, but also loads a default julia binary
 module load dev2024
+# Edit below to fit your own path to your julia. See onboarding docs on how to install julia
 export PATH="/scratch/tectonics/bert/julia_local/JuliaUp/bin:$PATH"
 module load CUDA/12.5 # on gpu nodes
 
@@ -57,10 +59,9 @@ echo "Running on hosts: $SLURM_NODELIST"
 echo "Current working directory is `pwd`"
 
 echo "  submitting the first job: `date` "
-# Enable below to enforce recompiling
+
+# Enable below to enforce recompiling. Useful if you changed something in the JR fork and want to guarantee a reset
 # rm -rf /scratch/tectonics/bert/julia_local/julia_depot/compiled/v1.*/JustRelax*
 
-# julia --project=. ./Original/Subduction2D.jl
 julia --project ./Subduction2D_SZU2019/Subduction2D.jl
-# /scratch/tectonics/GPU4GEO/julia_local/julia_depot/bin/mpiexecjl -n 2 julia --project=. ./Subduction2D_SZU2019/Subduction2D.jl
 echo "  first job finished: `date` "
