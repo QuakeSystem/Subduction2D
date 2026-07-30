@@ -61,7 +61,9 @@ echo "Current working directory is `pwd`"
 echo "  submitting the first job: `date` "
 
 # Enable below to enforce recompiling. Useful if you changed something in the JR fork and want to guarantee a reset
-# rm -rf /scratch/tectonics/bert/julia_local/julia_depot/compiled/v1.*/JustRelax*
+rm -rf /scratch/tectonics/bert/julia_local/julia_depot/compiled/v1.*/JustRelax*
 
 julia --project ./Subduction2D_SZU2019/Subduction2D.jl
+# julia --project ./old_versions/justrelax/v0.6.0/QuakeSystem/Subduction2D_DYREL_velbox.jl
+# julia --project ./old_versions/justrelax/v0.6.1/original/Subduction2D_DYREL.jl
 echo "  first job finished: `date` "

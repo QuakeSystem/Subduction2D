@@ -763,9 +763,9 @@ version = "0.73.26+0"
 
 [[deps.GeoParams]]
 deps = ["Adapt", "BibTeX", "DelimitedFiles", "ForwardDiff", "InternedStrings", "KernelDensitySJ", "LaTeXStrings", "LinearAlgebra", "Loess", "MuladdMacro", "Parameters", "Roots", "Setfield", "SpecialFunctions", "Static", "StaticArrays", "Statistics", "StatsBase", "UnPack", "Unidecode", "Unitful"]
-git-tree-sha1 = "c33d2a5069a21287a7758c563684fbb9f76310a0"
+path = "/scratch/tectonics/bert/GeoParams.jl"
 uuid = "e018b62d-d9de-4a26-8697-af89c310ae38"
-version = "0.7.16"
+version = "0.7.18"
 weakdeps = ["Makie"]
 
     [deps.GeoParams.extensions]
@@ -985,12 +985,6 @@ git-tree-sha1 = "012e604e1c7458645cb8b436f8fba789a51b257f"
 uuid = "9b13fd28-a010-5f03-acff-a1bbcff69959"
 version = "1.0.0"
 
-[[deps.Infiltrator]]
-deps = ["InteractiveUtils", "Markdown", "REPL", "UUIDs"]
-git-tree-sha1 = "0330ef9ac27dc069bf97fa5ab1a4391be4fcc4f6"
-uuid = "5903a43b-9cc3-4c30-8d17-598619ec4e9b"
-version = "1.9.11"
-
 [[deps.Inflate]]
 git-tree-sha1 = "d1b1b796e47d94588b3757fe84fbf65a5ec4a80d"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
@@ -1163,10 +1157,10 @@ version = "0.6.6"
     CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 
 [[deps.JustRelax]]
-deps = ["Adapt", "CellArrays", "Crayons", "GeoParams", "HDF5", "ImplicitGlobalGrid", "Infiltrator", "JLD2", "JustPIC", "LinearAlgebra", "MPI", "MuladdMacro", "ParallelStencil", "Printf", "Reexport", "StaticArrays", "Statistics", "TOML", "WriteVTK"]
+deps = ["Adapt", "CellArrays", "Crayons", "GeoParams", "HDF5", "ImplicitGlobalGrid", "JLD2", "JustPIC", "LinearAlgebra", "MPI", "MuladdMacro", "ParallelStencil", "Printf", "Reexport", "StaticArrays", "Statistics", "TOML", "WriteVTK"]
 path = "../JustRelax.jl"
 uuid = "34418575-392d-4e26-8c6d-96b0910afa06"
-version = "0.6.0"
+version = "0.6.1"
 
     [deps.JustRelax.extensions]
     JustRelaxAMDGPUExt = "AMDGPU"
