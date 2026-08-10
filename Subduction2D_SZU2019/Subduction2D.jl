@@ -206,6 +206,25 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function _mark_vbox_mask_center!(
+    mask_vbox_c,
+    xc,
+    zc,
+    cenx,
+    cenz,
+    halfx,
+    halfz,
+)
+    if i ≤ size(mask_vbox_c, 1) && j ≤ size(mask_vbox_c, 2)
+        x = xc[i]
+        z = zc[j]
+        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
+            @inbounds mask_vbox_c[i, j] = 1
+        end
+    end
+    return nothing
+end
+
 # Velocity boxes are applied on the same staggered coordinates as the Stokes solver.
 # In the new Geometry API these coordinates are stored in `grid.xi_vel`:
 # - `grid.xi_vel[1]` are the coordinates for Vx (x-face, z)
@@ -215,6 +234,7 @@ function apply_vel_boxes!(
     stokes,
     grid,
     boxes::Vector{VelBox2D},
+    mask_vbox_c,
 )
     isempty(boxes) && return nothing
 
@@ -222,18 +242,19 @@ function apply_vel_boxes!(
     grid_vx, grid_vy = grid.xi_vel
     xvx, yvx = grid_vx
     xvy, yvy = grid_vy
+    xc, yc = grid.xci   # cell-center coordinates
 
     # reset velocity-box masks: 0 ⇒ no box (free)
     stokes.mask_vbox_x.mask .= 0
     stokes.mask_vbox_y.mask .= 0
+    mask_vbox_c .= 0
 
     for box in boxes
         halfx = box.widthx / 2
         halfz = box.widthz / 2
 
         if box.has_vx
-            nx = length(xvx)
-            ny = length(yvx)
+            nx = length(xvx); ny = length(yvx)
             @parallel (@idx (nx, ny)) _apply_vel_box_Vx!(
                 Vx, xvx, yvx, box.cenx, box.cenz, halfx, halfz, box.vx
             )
@@ -249,8 +270,7 @@ function apply_vel_boxes!(
         end
 
         if box.has_vy
-            nx = length(xvy)
-            ny = length(yvy)
+            nx = length(xvy); ny = length(yvy)
             @parallel (@idx (nx, ny)) _apply_vel_box_Vy!(
                 Vy, xvy, yvy, box.cenx, box.cenz, halfx, halfz, box.vy
             )
@@ -262,6 +282,14 @@ function apply_vel_boxes!(
                 box.cenz,
                 halfx,
                 halfz,
+            )
+        end
+        # Mark the center-space mask whenever this box prescribes any velocity component,
+        # so RP gets frozen at these cells regardless of whether it's vx-only, vy-only, or both.
+        if box.has_vx || box.has_vy
+            nxc = length(xc); nyc = length(yc)
+            @parallel (@idx (nxc, nyc)) _mark_vbox_mask_center!(
+                mask_vbox_c, xc, yc, box.cenx, box.cenz, halfx, halfz,
             )
         end
     end
@@ -300,7 +328,7 @@ function main(
         grid = Geometry(ni, li; origin = origin)
         di_min = @. li / ni       # grid steps
     end
-    
+    mask_vbox_c = @zeros(ni...)   # center-space mask for the pressure/RP kernel
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
 
     # ----------------------------------------------------
@@ -427,7 +455,7 @@ function main(
         stress2grid!(stokes, pτ, particles)
 
         # Prescribe velocity boxes before solve so solver finds a solution consistent with them
-        apply_vel_boxes!(stokes, grid, vel_boxes_2D)
+        apply_vel_boxes!(stokes, grid, vel_boxes_2D, mask_vbox_c)
         update_halo!(@velocity(stokes)...)
 
         # Stokes solver ----------------
@@ -453,7 +481,8 @@ function main(
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1.0e-2,
-                    apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D),
+                    apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D, mask_vbox_c),
+                    mask_vbox_center = mask_vbox_c,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
