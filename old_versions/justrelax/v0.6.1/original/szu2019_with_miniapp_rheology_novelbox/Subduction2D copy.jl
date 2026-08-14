@@ -38,8 +38,8 @@ else
 end
 
 # Load file with all the rheology configurations
-setup_file = "Subduction2D_setup.jl"
-rheology_file = "Subduction2D_rheology.jl"
+setup_file = "Subduction2D_setup_miniapp_adapt.jl"
+rheology_file = "Subduction2D_rheology_miniapp_adapt.jl"
 include(setup_file)
 include(rheology_file)
 
@@ -74,9 +74,9 @@ function prepare_visualisation(ni; version=nothing)
     pvd_name = "Subduction2D"
     figdir   = "Subduction2D_SZU2019/data/Subduction2D_JRv0.6.1/$version"
     save_particle_points = false # set to true to save particle point clouds as VTK files (can generate large files)
-    vtk_every = 25 # save VTK every N iterations
-    particle_vtk_every = 25 # save particle VTK every N iterations
-    picture_every = 25
+    vtk_every = 1 # save VTK every N iterations
+    particle_vtk_every = 1 # save particle VTK every N iterations
+    picture_every = 1
 
 
     if do_vtk == true
@@ -300,7 +300,7 @@ function main(
     # copy_input_files(vis, setup_file, rheology_file)
 
     # Physical properties using GeoParams ----------------
-    rheology = init_rheologies_start()
+    rheology = init_rheology_nonNewtonian_plastic()
     dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     dt_max = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
@@ -392,23 +392,23 @@ function main(
     while it < 1000 # run only for 5 Myrs
         if it == 5
             vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 2.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
-            rheology = init_rheologies()
+            # rheology = init_rheologies()
         elseif it == 10
             vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 5.0 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
         elseif it == 15
             vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 7.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
         end
         # Get flat views of the raw data
-        phases_flat = pPhases.data[:]   # all particle phase values
-        temps_flat  = pT.data[:]        # all particle temperatures
-        index_flat  = particles.index.data[:]  # true = active particle
-        # Find active air particles
-        air_mask = (phases_flat .== 2.0) .& index_flat
-        @show sum(air_mask)
-        @show extrema(temps_flat[air_mask])
-        @show mean(temps_flat[air_mask])   # needs Statistics
-        # Set air particle temperatures to 273 K
-        pT.data[air_mask] .= 273.0
+        # phases_flat = pPhases.data[:]   # all particle phase values
+        # temps_flat  = pT.data[:]        # all particle temperatures
+        # index_flat  = particles.index.data[:]  # true = active particle
+        # # Find active air particles
+        # air_mask = (phases_flat .== 2.0) .& index_flat
+        # @show sum(air_mask)
+        # @show extrema(temps_flat[air_mask])
+        # @show mean(temps_flat[air_mask])   # needs Statistics
+        # # Set air particle temperatures to 273 K
+        # pT.data[air_mask] .= 273.0
 
         # interpolate fields from particle to grid vertices
         particle2centroid!(T_buffer, pT, particles)
@@ -458,9 +458,34 @@ function main(
 
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, dt)
-        # compute time step
+        Vx, Vy = @velocity(stokes)
+        println("extrema(Vx) = ", extrema(Array(Vx)))
+        println("extrema(Vy) = ", extrema(Array(Vy)))
+        println("argmax |Vx| = ", Tuple(argmax(abs.(Array(Vx)))))
+        println("argmax |Vy| = ", Tuple(argmax(abs.(Array(Vy)))))
+        println("extrema(stokes.viscosity.η)  = ", extrema(Array(stokes.viscosity.η)))
+        println("extrema(stokes.viscosity.η_vep) = ", extrema(Array(stokes.viscosity.η_vep)))
         dt_plot = dt
         dt = compute_dt(stokes, di_min, dt_max) #* 0.8
+        println("---- thermal solver diagnostics (it = $it) ----")
+
+        println("dt (physical, passed to solver) = ", dt)
+        println("dt in kyr = ", dt / (3600 * 24 * 365 * 1000))
+        println("args.dt (used inside args tuple) = ", args.dt)   # currently hardcoded to Inf, worth confirming it isn't leaking into the kernels
+        println("extrema(pt_thermal.dτ_ρ)  = ", extrema(Array(pt_thermal.dτ_ρ)))
+        println("extrema(pt_thermal.θr_dτ) = ", extrema(Array(pt_thermal.θr_dτ)))
+        println("extrema(thermal.T)  = ", extrema(Array(thermal.T)))
+        println("extrema(thermal.H)  = ", extrema(Array(thermal.H)))
+        println("extrema(thermal.shear_heating) = ", extrema(Array(thermal.shear_heating)))
+        if hasproperty(thermal, :adiabatic)
+            println("extrema(thermal.adiabatic) = ", extrema(Array(thermal.adiabatic)))
+        end
+        if thermal_bc.dirichlet !== nothing && thermal_bc.dirichlet.mask !== nothing
+            mask = Array(thermal_bc.dirichlet.mask)
+            println("Dirichlet mask: $(count(!iszero, mask)) / $(length(mask)) nodes fixed")
+        end
+        T_before = copy(Array(thermal.T))   # stash for comparison after the solve
+        println("-------------------------------------------------")
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
@@ -484,6 +509,12 @@ function main(
                 verbose = true,
             )
         )
+        T_after = Array(thermal.T)
+        println("norm(T_after - T_before) = ", norm(T_after .- T_before))
+        println("extrema(T_after - T_before) = ", extrema(T_after .- T_before))
+        println("extrema(thermal.ΔT) = ", extrema(Array(thermal.ΔT)))
+        println("extrema(thermal.ResT) = ", extrema(Array(thermal.ResT)))
+        println("=================================================")
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
