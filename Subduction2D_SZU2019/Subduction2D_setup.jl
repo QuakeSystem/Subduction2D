@@ -107,6 +107,16 @@ function GMG_subduction_2D_with_coords(
         T = ConstantTemp(T = 0)
     )
 
+    # Left side rift to detach plate
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (x0_km, x0_km, x0_km + 20, x0_km + 80),
+        zlim = (-100, -12.5, -12.5, -100),
+        T = ConstantTemp(T=Tlab)
+    )
+
     # Mantle temperature, linear geotherm with TLab = 1300 and T = Tbot 1445 C, from Katsura 2022.
     add_box!(
         Phases,
@@ -248,18 +258,7 @@ function GMG_subduction_2D_with_coords(
         zlim = (-14.5, -19.5, -32, -21),
         phase = ConstantPhase(5)
     )
-    #    left boundary
-    # low viscous left boundary
-    add_box!(
-        Phases,
-        Temp,
-        Grid2D;
-        xlim = (x0_km, x0_km + 10),
-        zlim = (-100, 0),
-        phase = ConstantPhase(8),
-        T = LinearTemp(Ttop = 0, Tbot = Tlab)
 
-    )
     add_vel_box!(
         cenx = 180 * 1.0e3,  # m
         cenz = -54.8 * 1.0e3,          # m

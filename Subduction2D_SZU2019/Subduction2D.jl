@@ -41,10 +41,10 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-include(joinpath(working_dir, "utils/visualisation.jl"))
-include(joinpath(working_dir, "utils/VelocityBoxes.jl"))
-include(joinpath(working_dir, "utils/HelperFunctions.jl"))
-include(joinpath(working_dir, "utils/NonuniformGrid.jl"))
+include(joinpath(working_dir, "LocalModules/visualisation.jl"))
+include(joinpath(working_dir, "LocalModules/VelocityBoxes.jl"))
+include(joinpath(working_dir, "LocalModules/HelperFunctions.jl"))
+include(joinpath(working_dir, "LocalModules/NonuniformGrid.jl"))
 
 # Load file with all the rheology configurations
 setup_file = "Subduction2D_setup.jl"
@@ -54,7 +54,7 @@ include(rheology_file)
 
 # Velocity box application kernels -- needs @init_parallel_stencil (above)
 # to have already run, and needs VelBox2D (from VelocityBoxes.jl, above).
-include(joinpath(working_dir,"utils/VelocityBoxKernels.jl"))
+include(joinpath(working_dir,"LocalModules/VelocityBoxKernels.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -194,7 +194,7 @@ function main(
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # visualization prep moved to utils/visualisation.jl
+    # visualization prep moved to LocalModules/visualisation.jl
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
@@ -207,7 +207,7 @@ function main(
 
     # Time loop
     t, it = 0.0, 0
-    while it < 1000 # run only for 5 Myrs
+    while it <= 2000 || t < 4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
         if it == 5
             vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 2.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
             rheology = init_rheologies()

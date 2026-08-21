@@ -218,13 +218,6 @@ function init_rheologies()
                     Ψ = Ψ)
             )),
             ),
-        SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
-            Phase=8,
-            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
-            HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
-            Conductivity=ConstantConductivity(; k=2.5),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+18),))
-            )
     )
 end
 
@@ -352,14 +345,6 @@ function init_rheologies_start()
             # # ),
             RadioactiveHeat=ConstantRadioactiveHeat(; H_r=2.00e-06), # W/m3
             CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),)),
-        ),
-        SetMaterialParams(; Name="left_boundary", # low viscosity boundary condition
-            Phase=8,
-            # Density=ConstantDensity(; ρ=3250),
-            Density = PT_Density(; ρ0 = 3.2e3, α = α, β = 0.0e0, T0 = 273 + 1474),
-            HeatCapacity=ConstantHeatCapacity(; Cp=1.0e3),
-            Conductivity=ConstantConductivity(; k=2.5),
-            CompositeRheology=CompositeRheology((LinearViscous(; η=1.00E+22),))
         ),
         )
 end
