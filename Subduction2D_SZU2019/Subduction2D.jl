@@ -2,11 +2,15 @@
 using GeoParams, CairoMakie, LinearAlgebra
 const isCUDA = true
 
+remote = true
+if remote
+    working_dir = "/scratch/tectonics/bert/Subduction2D"
+else
+    working_dir = "/Users/5723272/SD/Subduction2D"
+end
+
 @static if isCUDA
     using CUDA
-    include("../../../../utils/visualisation.jl")
-else
-    include("../utils/visualisation.jl")
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
@@ -37,11 +41,20 @@ else
     JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
+include(joinpath(working_dir, "LocalModules/visualisation.jl"))
+include(joinpath(working_dir, "LocalModules/VelocityBoxes.jl"))
+include(joinpath(working_dir, "LocalModules/HelperFunctions.jl"))
+include(joinpath(working_dir, "LocalModules/NonuniformGrid.jl"))
+
 # Load file with all the rheology configurations
 setup_file = "Subduction2D_setup.jl"
 rheology_file = "Subduction2D_rheology.jl"
 include(setup_file)
 include(rheology_file)
+
+# Velocity box application kernels -- needs @init_parallel_stencil (above)
+# to have already run, and needs VelBox2D (from VelocityBoxes.jl, above).
+include(joinpath(working_dir,"LocalModules/VelocityBoxKernels.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -65,200 +78,6 @@ end
     @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
     return nothing
 end
-# PREPARE VISUALIZATION SETTINGS
-function prepare_visualisation(ni; version=nothing)
-    # SETTINGS FOR VISUALIZATION AND OUTPUT
-    do_vtk   = true # set to true to generate VTK files for ParaView
-    pictures = true # set to true to generate PNG figures of particles and fields using Makie
-    # IF VTK OUTPUT YES
-    pvd_name = "Subduction2D"
-    figdir   = "Subduction2D_SZU2019/data/Subduction2D_JRv0.6.1/$version"
-    save_particle_points = false # set to true to save particle point clouds as VTK files (can generate large files)
-    vtk_every = 25 # save VTK every N iterations
-    particle_vtk_every = 25 # save particle VTK every N iterations
-    picture_every = 25
-
-
-    if do_vtk == true
-        vtk_dir = joinpath(figdir, "vtk")
-        if isfile(joinpath(vtk_dir, "$pvd_name.pvd"))
-            rm(joinpath(vtk_dir, "$pvd_name.pvd"))
-        end
-        take(vtk_dir)
-        checkpoint = joinpath(figdir, "checkpoint")
-        take(checkpoint)
-    end
-    vis=(;do_vtk,vtk_dir,pvd_name ,figdir,save_particle_points,vtk_every,particle_vtk_every,pictures,picture_every,checkpoint,Vx_v = @zeros(ni .+ 1...), Vy_v = @zeros(ni .+ 1...),)
-
-    return vis
-end
-
-function copy_input_files(vis, setup, rheology)
-    # List of files you want to copy
-    input_files = [
-        basename(@__FILE__),
-        setup,
-        rheology,
-    ]
-
-    # Ensure the figdir directory exists
-    isdir(vis.figdir) || mkpath(vis.figdir)
-
-    # Get the directory of the currently-running script
-    basepath = @__DIR__
-    prefix = "_used_"
-
-    # Copy each script into the figdir folder
-    for f in input_files
-        source = joinpath(basepath, f)
-        name, ext = splitext(f)
-        destination = joinpath(vis.figdir, prefix * name * ext)
-        cp(source, destination; force = true)
-    end
-    return nothing
-end
-
-# VELOCITY BOXES ROUTINES
-@parallel_indices (i, j) function _apply_vel_box_Vx!(
-    Vx,
-    xvx,
-    yvx,
-    cenx,
-    cenz,
-    halfx,
-    halfz,
-    vx_val,
-)
-    if i ≤ size(Vx, 1) && j ≤ size(Vx, 2)
-        x = xvx[i]
-        z = yvx[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds Vx[i, j] = vx_val
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _apply_vel_box_Vy!(
-    Vy,
-    xvy,
-    yvy,
-    cenx,
-    cenz,
-    halfx,
-    halfz,
-    vy_val,
-)
-    if i ≤ size(Vy, 1) && j ≤ size(Vy, 2)
-        x = xvy[i]
-        z = yvy[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds Vy[i, j] = vy_val
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_Vx!(
-    mask_vbox_x,
-    xvx,
-    yvx,
-    cenx,
-    cenz,
-    halfx,
-    halfz,
-)
-    if i ≤ size(mask_vbox_x, 1) && j ≤ size(mask_vbox_x, 2)
-        # mask indices (i,j) correspond to velocity DoFs at (i+1,j+1)
-        ii = i + 1
-        jj = j + 1
-        if ii ≤ length(xvx) && jj ≤ length(yvx)
-            x = xvx[ii]
-            z = yvx[jj]
-            if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-                @inbounds mask_vbox_x[i, j] = 1
-            end
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_Vy!(
-    mask_vbox_y,
-    xvy,
-    yvy,
-    cenx,
-    cenz,
-    halfx,
-    halfz,
-)
-    if i ≤ size(mask_vbox_y, 1) && j ≤ size(mask_vbox_y, 2)
-        # mask indices (i,j) correspond to velocity DoFs at (i+1,j+1)
-        ii = i + 1
-        jj = j + 1
-        if ii ≤ length(xvy) && jj ≤ length(yvy)
-            x = xvy[ii]
-            z = yvy[jj]
-            if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-                @inbounds mask_vbox_y[i, j] = 1
-            end
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_center!(mask_vbox_c, xc, zc, cenx, cenz, halfx, halfz)
-    if i ≤ size(mask_vbox_c, 1) && j ≤ size(mask_vbox_c, 2)
-        x = xc[i]; z = zc[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds mask_vbox_c[i, j] = 1
-        end
-    end
-    return nothing
-end
-
-# Velocity boxes are applied on the same staggered coordinates as the Stokes solver.
-# In the new Geometry API these coordinates are stored in `grid.xi_vel`:
-# - `grid.xi_vel[1]` are the coordinates for Vx (x-face, z)
-# - `grid.xi_vel[2]` are the coordinates for Vy (x, z-face)
-# so the box region is applied to the correct velocity DoFs.
-function apply_vel_boxes!(
-    stokes,
-    grid,
-    boxes::Vector{VelBox2D},
-    mask_vbox_c,
-)
-    isempty(boxes) && return nothing
-    Vx, Vy = @velocity(stokes)
-    grid_vx, grid_vy = grid.xi_vel
-    xvx, yvx = grid_vx
-    xvy, yvy = grid_vy
-    xc, zc = grid.xci
-
-    stokes.mask_vbox_x.mask .= 0
-    stokes.mask_vbox_y.mask .= 0
-    mask_vbox_c .= 0
-
-    for box in boxes
-        halfx = box.widthx / 2
-        halfz = box.widthz / 2
-        if box.has_vx
-            nx = length(xvx); ny = length(yvx)
-            @parallel (@idx (nx, ny)) _apply_vel_box_Vx!(Vx, xvx, yvx, box.cenx, box.cenz, halfx, halfz, box.vx)
-            @parallel (@idx (nx, ny)) _mark_vbox_mask_Vx!(stokes.mask_vbox_x.mask, xvx, yvx, box.cenx, box.cenz, halfx, halfz)
-        end
-        if box.has_vy
-            nx = length(xvy); ny = length(yvy)
-            @parallel (@idx (nx, ny)) _apply_vel_box_Vy!(Vy, xvy, yvy, box.cenx, box.cenz, halfx, halfz, box.vy)
-            @parallel (@idx (nx, ny)) _mark_vbox_mask_Vy!(stokes.mask_vbox_y.mask, xvy, yvy, box.cenx, box.cenz, halfx, halfz)
-        end
-        if box.has_vx || box.has_vy
-            nxc = length(xc); nzc = length(zc)
-            @parallel (@idx (nxc, nzc)) _mark_vbox_mask_center!(mask_vbox_c, xc, zc, box.cenx, box.cenz, halfx, halfz)
-        end
-    end
-    return nothing
-end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -268,8 +87,8 @@ function main(
     phases_GMG,
     T_GMG,
     igg;
-    xvi,
-    xci,
+    xvi = nothing,
+    xci = nothing,
     nx = 16,
     ny = 16,
     ref_grid = 0,
@@ -297,7 +116,6 @@ function main(
     # ----------------------------------------------------
     # Set flags and parameters for visualization and output and create folders for output
     vis = prepare_visualisation(ni, version=version)
-    # copy_input_files(vis, setup_file, rheology_file)
 
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies_start()
@@ -376,7 +194,7 @@ function main(
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # visualization prep moved to utils/visualisation.jl
+    # visualization prep moved to LocalModules/visualisation.jl
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
@@ -389,7 +207,7 @@ function main(
 
     # Time loop
     t, it = 0.0, 0
-    while it < 1000 # run only for 5 Myrs
+    while it <= 2000 || t < 4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
         if it == 5
             vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 2.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
             rheology = init_rheologies()
@@ -511,9 +329,10 @@ function main(
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
         ### PARAVIEW PLOTTING
-        # if it == 1 || rem(it, 25) == 0
-            # checkpointing_jld2(checkpoint, stokes, thermal, t, dt; it = it)
-            # checkpointing_particles(checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+        if it == 1 || rem(it, 25) == 0
+            checkpointing_jld2(vis.checkpoint, stokes, thermal, t, dt; it = it)
+            checkpointing_particles(vis.checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+        end
         (; η_vep, η) = stokes.viscosity
         if vis.do_vtk && (it == 1 || rem(it, vis.vtk_every) == 0)
             velocity2vertex!(vis.Vx_v, vis.Vy_v, @velocity(stokes)...)
@@ -660,8 +479,7 @@ version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
 println("version is $version")
 
 # MODEL SETUP
-n = 32
-nx, ny = n * 10, round(Int, n * 1.5 * 1.5) # increased vertical size by 50%
+nx, ny = 900, 220
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
 ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
 
@@ -685,8 +503,8 @@ main(
     phases_GMG,
     T_GMG,
     igg;
-    xvi,
-    xci,
+    xvi = xvi,
+    xci = xci,
     nx = nx,
     ny = ny,
     version = version,

@@ -59,15 +59,21 @@ function make_figure(
     )
 
     ar = 2.8
-    ax1 = Axis(fig[1, 1], aspect = ar, title = "Material Phase")
-    ax2 = Axis(fig[2, 1], aspect = ar, title = "Temperature [K]")
-    ax3 = Axis(fig[3, 1], aspect = ar, title = "Density [kg/m³]")
-    ax4 = Axis(fig[1, 3], aspect = ar, title = "Vx [m/s]")
-    ax5 = Axis(fig[2, 3], aspect = ar, title = "Vy [m/s]")
-    ax6 = Axis(fig[3, 3], aspect = ar, title = "log10(τII) [Pa]")
-    ax7 = Axis(fig[1, 5], aspect = ar, title = "log10(εII)")
-    ax8 = Axis(fig[2, 5], aspect = ar, title = "log10(η)")
-    ax9 = Axis(fig[3, 5], aspect = ar, title = "log10(η_vep)")
+    tick_opts = (
+    xticksmirrored = true,
+    yticksmirrored = true,
+    xtickalign = 1,   # set to 0 if you'd rather keep them outside
+    ytickalign = 1,
+    )
+    ax1 = Axis(fig[1, 1], aspect = ar, title = "Material Phase"; tick_opts...)
+    ax2 = Axis(fig[2, 1], aspect = ar, title = "Temperature [K]"; tick_opts...)
+    ax3 = Axis(fig[3, 1], aspect = ar, title = "Density [kg/m³]"; tick_opts...)
+    ax4 = Axis(fig[1, 3], aspect = ar, title = "Vx [m/s]"; tick_opts...)
+    ax5 = Axis(fig[2, 3], aspect = ar, title = "Vy [m/s]"; tick_opts...)
+    ax6 = Axis(fig[3, 3], aspect = ar, title = "log10(τII) [Pa]"; tick_opts...)
+    ax7 = Axis(fig[1, 5], aspect = ar, title = "log10(εII)"; tick_opts...)
+    ax8 = Axis(fig[2, 5], aspect = ar, title = "log10(η)"; tick_opts...)
+    ax9 = Axis(fig[3, 5], aspect = ar, title = "log10(η_vep)"; tick_opts...)
 
     # Apply zoom limits
     for ax in (ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9)

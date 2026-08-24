@@ -88,8 +88,8 @@ x_center_frac = 785.0 / 1500.0
 k_x = 25.0
 ny_vertices = 220 + 1
 refine_factor_y = 30.0
-w_ref_ratio_y = -170.0 / z0_km
-y_center_frac = (-80.0 - (z0_km)) / -z0_km
+w_ref_ratio_y = 170.0 / 260.0
+y_center_frac = (-80.0 - (-260.0)) / 260.0
 k_y = 20.0
 ref_grid = 1
 # ------------------------------------------------------------

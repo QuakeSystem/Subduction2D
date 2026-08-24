@@ -5,7 +5,7 @@ const isCUDA = true
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-using Pkg; Pkg.activate("miniapps")
+# using Pkg; Pkg.activate("miniapps")
 
 # Load script dependencies
 using GeoParams, CairoMakie
