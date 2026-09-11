@@ -1,5 +1,5 @@
 # Load script dependencies
-using GeoParams, CairoMakie, LinearAlgebra
+using GeoParams, CairoMakie, LinearAlgebra, HDF5
 const isCUDA = true
 
 remote = true
@@ -31,7 +31,7 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
@@ -186,8 +186,10 @@ function main(
         backend, rheology, phase_ratios, args0, dt, ni, di_min, li; ϵ = 1.0e-8, CFL = 0.95 / √2
     )
 
-    # Boundary conditions
-    flow_bcs = VelocityBoundaryConditions(;
+    # Boundary conditions (includes the internal velocity-box dirichlet region,
+    # rebuilt each timestep below as the boxes ramp up -- see VelocityBoxKernels.jl)
+    flow_bcs = velocity_box_flow_bcs(
+        stokes, grid, vel_boxes_2D;
         free_slip = (left = true, right = true, top = true, bot = true),
         free_surface = false,
     )
@@ -203,7 +205,6 @@ function main(
     τyy_v = @zeros(ni .+ 1...)
 
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
-    mask_vbox_c = @zeros(ni...)
 
     # Time loop
     t, it = 0.0, 0
@@ -229,15 +230,20 @@ function main(
         pT.data[air_mask] .= 273.0
 
         # interpolate fields from particle to grid vertices
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:end-1, 2:end-1] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
-
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
 
-        # Prescribe velocity boxes before solve so solver finds a solution consistent with them
-        apply_vel_boxes!(stokes, grid, vel_boxes_2D, mask_vbox_c)
+        # Rebuild flow_bcs' internal velocity-box dirichlet region so it picks up any
+        # change to vel_boxes_2D (e.g. the ramped-up prescribed velocity at it==5,10,15);
+        # solve_DYREL! itself re-asserts the prescribed value every DR iteration.
+        flow_bcs = velocity_box_flow_bcs(
+            stokes, grid, vel_boxes_2D;
+            free_slip = (left = true, right = true, top = true, bot = true),
+            free_surface = false,
+        )
         update_halo!(@velocity(stokes)...)
 
         # Stokes solver ----------------
@@ -263,8 +269,6 @@ function main(
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1.0e-2,
-                    apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D, mask_vbox_c),
-                    mask_vbox_center = mask_vbox_c,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
@@ -327,7 +331,6 @@ function main(
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-
         ### PARAVIEW PLOTTING
         if it == 1 || rem(it, 25) == 0
             checkpointing_jld2(vis.checkpoint, stokes, thermal, t, dt; it = it)

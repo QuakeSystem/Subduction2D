@@ -260,11 +260,11 @@ function GMG_subduction_2D_with_coords(
     )
 
     add_vel_box!(
-        cenx = 180 * 1.0e3,  # m
+        cenx = 360 * 1.0e3,  # m
         cenz = -54.8 * 1.0e3,          # m
         widthx = 20 * 1.0e3,          # m
         widthz = 23.6 * 1.0e3,           # m
-        vx = 0 * 0.01 / (3600 * 24 * 365)             # m/s (optional)
+        vx = 5 * 0.01 / (3600 * 24 * 365)             # m/s (optional)
         #    vy     = -4.0e-9,                    # m/s (optional)
     )
 

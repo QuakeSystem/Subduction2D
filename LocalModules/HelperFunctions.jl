@@ -1,5 +1,5 @@
 # PREPARE VISUALIZATION SETTINGS
-function prepare_visualisation(ni; do_vtk=true, pictures = true,  pvd_name = "Subduction2D", data_folder = "Subduction2D_SZU2019/data", JRversion = "Subduction2D_JRv0.6.1", version=nothing, save_particle_points = false, vtk_every = 25,  particle_vtk_every = 25, picture_every = 25)
+function prepare_visualisation(ni; do_vtk=true, pictures = true,  pvd_name = "Subduction2D", data_folder = "Subduction2D_SZU2019/data", JRversion = "Subduction2D_pre_JRv0.8.0", version=nothing, save_particle_points = false, vtk_every = 25,  particle_vtk_every = 25, picture_every = 25)
     figdir   = joinpath(data_folder, JRversion, version)
     if do_vtk == true
         vtk_dir = joinpath(figdir, "vtk")

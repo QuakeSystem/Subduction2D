@@ -12,7 +12,7 @@ if [ -z "$VERSION" ]; then
 fi
 
 TEMPLATE_DIR="Subduction2D_SZU2019"
-OUTDIR="Subduction2D_SZU2019/data/Subduction2D_JRv0.6.1/$VERSION"
+OUTDIR="Subduction2D_SZU2019/data/Subduction2D_pre_JRv0.8.0/$VERSION"
 
 # Create run directory
 mkdir -p "$OUTDIR"
