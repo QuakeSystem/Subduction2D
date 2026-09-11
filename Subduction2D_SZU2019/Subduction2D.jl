@@ -127,11 +127,17 @@ function main(
     nxcell = 40
     max_xcell = 60
     min_xcell = 20
+    # JustPIC's `init_particles` expects host coordinate vectors (its parameter is
+    # named `xi_vel_cpu`) and uploads to the backend itself. With the refined grid,
+    # `grid.xi_vel` already lives on the GPU, so hand it CPU copies to avoid scalar
+    # indexing in `add_periodic_ghost_nodes`.
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell,
+        map(t -> Array.(t), grid.xi_vel)...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
-    # grid_vxi = velocity_grids(xci, xvi, di)
+    # grid_vxi = velocity_grids(xci, xvi, grid.di.vertex)
+    grid_vxi = velocity_grids_gpu(xci, xvi, grid.di.vertex)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
 
@@ -500,6 +506,21 @@ else
     igg
 end
 
+function velocity_grids_gpu(xci, xvi, di)
+    dxW = sum(@view di[1][1:1]);   dyW = sum(@view di[2][1:1])
+    dxE = sum(@view di[1][end:end]); dyE = sum(@view di[2][end:end])
+
+    x0 = sum(@view xci[1][1:1]);   xN = sum(@view xci[1][end:end])
+    y0 = sum(@view xci[2][1:1]);   yN = sum(@view xci[2][end:end])
+
+    xghost = edge_pad(xci[1], x0 - dxW, xN + dxE)
+    yghost = edge_pad(xci[2], y0 - dyW, yN + dyE)
+
+    grid_vx = xvi[1], yghost
+    grid_vy = xghost, xvi[2]
+
+    return grid_vx, grid_vy
+end
 main(
     li,
     origin,
