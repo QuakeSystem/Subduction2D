@@ -67,6 +67,16 @@ function GMG_subduction_2D(nx, ny)
         T = HalfspaceCoolingTemp(Tsurface = 20, Tmantle = Tbot, Age = 50, Adiabat = 0)
     )
 
+    add_vel_box!(
+        cenx = 360 * 1.0e3,  # m
+        cenz = -80 * 1.0e3,          # m
+        widthx = 50 * 1.0e3,          # m
+        widthz = 50.6 * 1.0e3,           # m
+        vx = 20 * 0.01 / (3600 * 24 * 365)             # m/s (optional)
+        #    vy     = -4.0e-9,                    # m/s (optional)
+    )
+
+
     surf = Grid2D.z.val .> 0.0
     Temp[surf] .= 20.0
     Phases[surf] .= 3

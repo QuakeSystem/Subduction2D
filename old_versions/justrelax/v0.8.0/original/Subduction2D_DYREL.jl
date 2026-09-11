@@ -1,4 +1,4 @@
-const isCUDA = true
+const isCUDA = false
 # const isCUDA = true
 
 @static if isCUDA
@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 # using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -28,14 +28,15 @@ const backend_JP = @static if isCUDA
 else
     JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
-
+include("/scratch/tectonics/bert/Subduction2D/LocalModules/VelocityBoxes.jl")
 # Load script dependencies
 using GeoParams, CairoMakie
 
 
 # Load file with all the rheology configurations
-include("Subduction2D_setup.jl")
-include("Subduction2D_rheology.jl")
+include("/scratch/tectonics/bert/Subduction2D/old_versions/justrelax/v0.8.0/original/Subduction2D_setup.jl")
+include("/scratch/tectonics/bert/Subduction2D/old_versions/justrelax/v0.8.0/original/Subduction2D_rheology.jl")
+include("/scratch/tectonics/bert/Subduction2D/LocalModules/VelocityBoxKernels.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -137,7 +138,12 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     )
 
     # Boundary conditions
-    flow_bcs = VelocityBoundaryConditions(;
+    # flow_bcs = VelocityBoundaryConditions(;
+    #     free_slip = (left = true, right = true, top = true, bot = true),
+    #     free_surface = false,
+    # )
+    flow_bcs = velocity_box_flow_bcs(
+        stokes, grid, vel_boxes_2D;
         free_slip = (left = true, right = true, top = true, bot = true),
         free_surface = false,
     )
@@ -149,10 +155,10 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
         take(vtk_dir)
-        checkpoint = joinpath(figdir, "checkpoint")
-        take(checkpoint)
     end
     take(figdir)
+    checkpoint = joinpath(figdir, "checkpoint")
+    take(checkpoint)
     # ----------------------------------------------------
 
     local Vx_v, Vy_v
@@ -162,13 +168,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     end
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
-
-    τxx_v = @zeros(ni .+ 1...)
-    τyy_v = @zeros(ni .+ 1...)
+    centroid2particle!(pT, thermal.T, particles)
 
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
+
+    dt₀ = similar(thermal.T)
 
     # Time loop
     t, it = 0.0, 0
@@ -244,9 +248,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -255,13 +264,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(
-            particles,
-            pPhases,
-            particle_args_reduced,
-            (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy)
-        )
+        # Inject phase labels first, then initialize every newly injected particle field
+        # through the regular centroid/vertex interpolation paths.
+        inject_particles_phase!(particles, pPhases, (), ())
+        centroid2particle!(pT, thermal.T, particles)
+        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles)
+        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles)
+        grid2particle!(pτ.τ_shear[1], stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
+        grid2particle!(pτ.ω[1], stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
