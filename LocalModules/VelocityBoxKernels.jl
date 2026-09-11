@@ -1,10 +1,18 @@
 """
 VelocityBoxKernels.jl
 
-ParallelStencil kernels that write prescribed velocities from `VelBox2D`
-boxes (see VelocityBoxes.jl) into the Stokes solver's velocity arrays, plus
-`apply_vel_boxes!`, the driver that loops over all active boxes and calls
-them.
+Builds a `VelocityBoundaryConditions` whose `dirichlet` field enforces the
+currently-registered `VelBox2D` boxes (see VelocityBoxes.jl) as an internal
+prescribed-velocity region.
+
+This replaces the older `stokes.mask_vbox_x`/`mask_vbox_y` +
+`apply_velocity_box` mechanism now that JustRelax's DYREL solver enforces
+internal velocity Dirichlet regions itself via
+`VelocityBoundaryConditions.dirichlet` (JustRelax.jl branch
+`feature/velbox-dirichlet-bc`). The DYREL DR kernel re-asserts the prescribed
+value at every pseudo-transient iteration on its own, so there is no separate
+pre-solve velocity write anymore -- just build `flow_bcs` with
+`velocity_box_flow_bcs` and hand it to `solve_DYREL!` as before.
 
 ORDERING REQUIREMENT: this file uses `@parallel_indices` / `@parallel` /
 `@idx`, which depend on `@init_parallel_stencil` having already run in your
@@ -19,151 +27,64 @@ first too.
 # - `grid.xi_vel[1]` are the coordinates for Vx (x-face, z)
 # - `grid.xi_vel[2]` are the coordinates for Vy (x, z-face)
 # so the box region is applied to the correct velocity DoFs.
+#
+# `mask`/`value` here are sized exactly like the velocity component array
+# they belong to (Vx or Vy) -- unlike the old mask_vbox_x/y (sized like the
+# interior-only residual array Rx/Ry), so there is no index offset to keep in
+# sync with the DYREL kernels by hand.
 
-@parallel_indices (i, j) function _apply_vel_box_Vx!(
-        Vx,
-        xvx,
-        yvx,
-        cenx,
-        cenz,
-        halfx,
-        halfz,
-        vx_val,
-    )
-    if i ≤ size(Vx, 1) && j ≤ size(Vx, 2)
-        x = xvx[i]
-        z = yvx[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds Vx[i, j] = vx_val
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _apply_vel_box_Vy!(
-        Vy,
-        xvy,
-        yvy,
-        cenx,
-        cenz,
-        halfx,
-        halfz,
-        vy_val,
-    )
-    if i ≤ size(Vy, 1) && j ≤ size(Vy, 2)
-        x = xvy[i]
-        z = yvy[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds Vy[i, j] = vy_val
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_Vx!(
-        mask_vbox_x,
-        xvx,
-        yvx,
-        cenx,
-        cenz,
-        halfx,
-        halfz,
-    )
-    if i ≤ size(mask_vbox_x, 1) && j ≤ size(mask_vbox_x, 2)
-        # mask indices (i,j) correspond to velocity DoFs at (i+1,j+1)
-        ii = i + 1
-        jj = j + 1
-        if ii ≤ length(xvx) && jj ≤ length(yvx)
-            x = xvx[ii]
-            z = yvx[jj]
-            if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-                @inbounds mask_vbox_x[i, j] = 1
-            end
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_Vy!(
-        mask_vbox_y,
-        xvy,
-        yvy,
-        cenx,
-        cenz,
-        halfx,
-        halfz,
-    )
-    if i ≤ size(mask_vbox_y, 1) && j ≤ size(mask_vbox_y, 2)
-        # mask indices (i,j) correspond to velocity DoFs at (i+1,j+1)
-        ii = i + 1
-        jj = j + 1
-        if ii ≤ length(xvy) && jj ≤ length(yvy)
-            x = xvy[ii]
-            z = yvy[jj]
-            if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-                @inbounds mask_vbox_y[i, j] = 1
-            end
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_center!(mask_vbox_c, xc, zc, cenx, cenz, halfx, halfz)
-    if i ≤ size(mask_vbox_c, 1) && j ≤ size(mask_vbox_c, 2)
-        x = xc[i]
-        z = zc[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds mask_vbox_c[i, j] = 1
+@parallel_indices (i, j) function _mark_vbox!(mask, value, xv, yv, cenx, cenz, halfx, halfz, v_val)
+    if i <= size(mask, 1) && j <= size(mask, 2)
+        x = xv[i]; z = yv[j]
+        if abs(x - cenx) <= halfx && abs(z - cenz) <= halfz
+            @inbounds mask[i, j] = 1
+            @inbounds value[i, j] = v_val
         end
     end
     return nothing
 end
 
 """
-    apply_vel_boxes!(stokes, grid, boxes::Vector{VelBox2D}, mask_vbox_c)
+    velocity_box_flow_bcs(stokes, grid, boxes::Vector{VelBox2D}; free_slip, free_surface = false)
 
-Overwrite `stokes`'s velocity arrays inside each box in `boxes` with its
-prescribed value(s), and set the corresponding entries of
-`stokes.mask_vbox_x`, `stokes.mask_vbox_y`, and `mask_vbox_c` so the solver
-treats those degrees of freedom as fixed. Resets all three masks to zero
-first, so calling this with an empty `boxes` list clears any previously
-applied constraints.
+Build a `VelocityBoundaryConditions` with the interior `dirichlet` region set
+from `boxes`. Call this once per timestep before `solve_DYREL!` -- rebuilding
+it is cheap (a couple of small array allocations + a `@parallel` mask pass),
+and picks up any change to `boxes` (e.g. a ramped-up prescribed velocity)
+immediately.
+
+Uses `DirichletBoundaryCondition(value, Mask(mask))` directly (not the
+`(; constant, mask)` shorthand) so that a box prescribing exactly zero
+velocity is still correctly marked as constrained -- the shorthand's
+array form infers its mask from non-zero value entries, which cannot
+represent a prescribed value of exactly zero.
 """
-function apply_vel_boxes!(
-        stokes,
-        grid,
-        boxes::Vector{VelBox2D},
-        mask_vbox_c,
+function velocity_box_flow_bcs(
+        stokes, grid, boxes::Vector{VelBox2D};
+        free_slip = (left = true, right = true, top = true, bot = true),
+        free_surface = false,
     )
-    isempty(boxes) && return nothing
     Vx, Vy = @velocity(stokes)
-    grid_vx, grid_vy = grid.xi_vel
-    xvx, yvx = grid_vx
-    xvy, yvy = grid_vy
-    xc, zc = grid.xci
-    stokes.mask_vbox_x.mask .= 0
-    stokes.mask_vbox_y.mask .= 0
-    mask_vbox_c .= 0
+    xvx, yvx = grid.xi_vel[1]
+    xvy, yvy = grid.xi_vel[2]
+
+    mask_x, value_x = @zeros(size(Vx)...), @zeros(size(Vx)...)
+    mask_y, value_y = @zeros(size(Vy)...), @zeros(size(Vy)...)
+
     for box in boxes
-        halfx = box.widthx / 2
-        halfz = box.widthz / 2
+        halfx, halfz = box.widthx / 2, box.widthz / 2
         if box.has_vx
-            nx = length(xvx)
-            ny = length(yvx)
-            @parallel (@idx (nx, ny)) _apply_vel_box_Vx!(Vx, xvx, yvx, box.cenx, box.cenz, halfx, halfz, box.vx)
-            @parallel (@idx (nx, ny)) _mark_vbox_mask_Vx!(stokes.mask_vbox_x.mask, xvx, yvx, box.cenx, box.cenz, halfx, halfz)
+            @parallel (@idx size(mask_x)) _mark_vbox!(mask_x, value_x, xvx, yvx, box.cenx, box.cenz, halfx, halfz, box.vx)
         end
         if box.has_vy
-            nx = length(xvy)
-            ny = length(yvy)
-            @parallel (@idx (nx, ny)) _apply_vel_box_Vy!(Vy, xvy, yvy, box.cenx, box.cenz, halfx, halfz, box.vy)
-            @parallel (@idx (nx, ny)) _mark_vbox_mask_Vy!(stokes.mask_vbox_y.mask, xvy, yvy, box.cenx, box.cenz, halfx, halfz)
-        end
-        if box.has_vx || box.has_vy
-            nxc = length(xc)
-            nzc = length(zc)
-            @parallel (@idx (nxc, nzc)) _mark_vbox_mask_center!(mask_vbox_c, xc, zc, box.cenx, box.cenz, halfx, halfz)
+            @parallel (@idx size(mask_y)) _mark_vbox!(mask_y, value_y, xvy, yvy, box.cenx, box.cenz, halfx, halfz, box.vy)
         end
     end
-    return nothing
+
+    dirichlet = (;
+        Vx = JustRelax.DirichletBoundaryCondition(value_x, JustRelax.Mask(mask_x)),
+        Vy = JustRelax.DirichletBoundaryCondition(value_y, JustRelax.Mask(mask_y)),
+    )
+    return VelocityBoundaryConditions(; free_slip = free_slip, free_surface = free_surface, dirichlet = dirichlet)
 end
+## END OF HELPER FUNCTION ------------------------------------------------------------
