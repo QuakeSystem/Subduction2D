@@ -8,7 +8,7 @@ const isCUDA = true
 # else
 #     include("../utils/visualisation.jl")
 end
-include("scratch/tectonics/bert/Subduction2D/utils/visualisation.jl")
+include("/scratch/tectonics/bert/Subduction2D/LocalModules/visualisation.jl")
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
@@ -75,9 +75,9 @@ function prepare_visualisation(ni; version=nothing)
     pvd_name = "Subduction2D"
     figdir   = "Subduction2D_SZU2019/data/Subduction2D_JRv0.6.1/$version"
     save_particle_points = false # set to true to save particle point clouds as VTK files (can generate large files)
-    vtk_every = 25 # save VTK every N iterations
-    particle_vtk_every = 25 # save particle VTK every N iterations
-    picture_every = 25
+    vtk_every = 5 # save VTK every N iterations
+    particle_vtk_every = 5 # save particle VTK every N iterations
+    picture_every = 5
 
 
     if do_vtk == true
@@ -120,145 +120,78 @@ function copy_input_files(vis, setup, rheology)
 end
 
 # VELOCITY BOXES ROUTINES
-@parallel_indices (i, j) function _apply_vel_box_Vx!(
-    Vx,
-    xvx,
-    yvx,
-    cenx,
-    cenz,
-    halfx,
-    halfz,
-    vx_val,
-)
-    if i ≤ size(Vx, 1) && j ≤ size(Vx, 2)
-        x = xvx[i]
-        z = yvx[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds Vx[i, j] = vx_val
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _apply_vel_box_Vy!(
-    Vy,
-    xvy,
-    yvy,
-    cenx,
-    cenz,
-    halfx,
-    halfz,
-    vy_val,
-)
-    if i ≤ size(Vy, 1) && j ≤ size(Vy, 2)
-        x = xvy[i]
-        z = yvy[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds Vy[i, j] = vy_val
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_Vx!(
-    mask_vbox_x,
-    xvx,
-    yvx,
-    cenx,
-    cenz,
-    halfx,
-    halfz,
-)
-    if i ≤ size(mask_vbox_x, 1) && j ≤ size(mask_vbox_x, 2)
-        # mask indices (i,j) correspond to velocity DoFs at (i+1,j+1)
-        ii = i + 1
-        jj = j + 1
-        if ii ≤ length(xvx) && jj ≤ length(yvx)
-            x = xvx[ii]
-            z = yvx[jj]
-            if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-                @inbounds mask_vbox_x[i, j] = 1
-            end
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_Vy!(
-    mask_vbox_y,
-    xvy,
-    yvy,
-    cenx,
-    cenz,
-    halfx,
-    halfz,
-)
-    if i ≤ size(mask_vbox_y, 1) && j ≤ size(mask_vbox_y, 2)
-        # mask indices (i,j) correspond to velocity DoFs at (i+1,j+1)
-        ii = i + 1
-        jj = j + 1
-        if ii ≤ length(xvy) && jj ≤ length(yvy)
-            x = xvy[ii]
-            z = yvy[jj]
-            if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-                @inbounds mask_vbox_y[i, j] = 1
-            end
-        end
-    end
-    return nothing
-end
-
-@parallel_indices (i, j) function _mark_vbox_mask_center!(mask_vbox_c, xc, zc, cenx, cenz, halfx, halfz)
-    if i ≤ size(mask_vbox_c, 1) && j ≤ size(mask_vbox_c, 2)
-        x = xc[i]; z = zc[j]
-        if abs(x - cenx) ≤ halfx && abs(z - cenz) ≤ halfz
-            @inbounds mask_vbox_c[i, j] = 1
-        end
-    end
-    return nothing
-end
-
-# Velocity boxes are applied on the same staggered coordinates as the Stokes solver.
-# In the new Geometry API these coordinates are stored in `grid.xi_vel`:
+#
+# Builds a `VelocityBoundaryConditions` whose `dirichlet` field enforces the
+# registered `VelBox2D` boxes as an internal prescribed-velocity region. This
+# replaces the older `stokes.mask_vbox_x`/`mask_vbox_y` + `apply_vel_boxes!`
+# mechanism now that JustRelax's DYREL solver enforces internal velocity
+# Dirichlet regions itself (branch `feature/velocitybox_dirichletbcs`). The
+# DYREL DR kernel re-asserts the prescribed value at every pseudo-transient
+# iteration on its own, so there is no separate pre-solve velocity write
+# anymore -- just build `flow_bcs` with `velocity_box_flow_bcs` and hand it to
+# `solve_DYREL!` as before. There is no replacement yet for the old
+# `mask_vbox_center` (pressure/strain-rate masking at the box) -- that's
+# deferred, not carried over.
+#
+# Velocity boxes are applied on the same staggered coordinates as the Stokes
+# solver. In the Geometry API these coordinates are stored in `grid.xi_vel`:
 # - `grid.xi_vel[1]` are the coordinates for Vx (x-face, z)
 # - `grid.xi_vel[2]` are the coordinates for Vy (x, z-face)
 # so the box region is applied to the correct velocity DoFs.
-function apply_vel_boxes!(
-    stokes,
-    grid,
-    boxes::Vector{VelBox2D},
-    mask_vbox_c,
-)
-    isempty(boxes) && return nothing
-    Vx, Vy = @velocity(stokes)
-    grid_vx, grid_vy = grid.xi_vel
-    xvx, yvx = grid_vx
-    xvy, yvy = grid_vy
-    xc, zc = grid.xci
-
-    stokes.mask_vbox_x.mask .= 0
-    stokes.mask_vbox_y.mask .= 0
-    mask_vbox_c .= 0
-
-    for box in boxes
-        halfx = box.widthx / 2
-        halfz = box.widthz / 2
-        if box.has_vx
-            nx = length(xvx); ny = length(yvx)
-            @parallel (@idx (nx, ny)) _apply_vel_box_Vx!(Vx, xvx, yvx, box.cenx, box.cenz, halfx, halfz, box.vx)
-            @parallel (@idx (nx, ny)) _mark_vbox_mask_Vx!(stokes.mask_vbox_x.mask, xvx, yvx, box.cenx, box.cenz, halfx, halfz)
-        end
-        if box.has_vy
-            nx = length(xvy); ny = length(yvy)
-            @parallel (@idx (nx, ny)) _apply_vel_box_Vy!(Vy, xvy, yvy, box.cenx, box.cenz, halfx, halfz, box.vy)
-            @parallel (@idx (nx, ny)) _mark_vbox_mask_Vy!(stokes.mask_vbox_y.mask, xvy, yvy, box.cenx, box.cenz, halfx, halfz)
-        end
-        if box.has_vx || box.has_vy
-            nxc = length(xc); nzc = length(zc)
-            @parallel (@idx (nxc, nzc)) _mark_vbox_mask_center!(mask_vbox_c, xc, zc, box.cenx, box.cenz, halfx, halfz)
+#
+# `mask`/`value` here are sized exactly like the velocity component array
+# they belong to (Vx or Vy) -- unlike the old mask_vbox_x/y (sized like the
+# interior-only residual array Rx/Ry), so there is no index offset to keep in
+# sync with the DYREL kernels by hand.
+@parallel_indices (i, j) function _mark_vbox!(mask, value, xv, yv, cenx, cenz, halfx, halfz, v_val)
+    if i <= size(mask, 1) && j <= size(mask, 2)
+        x = xv[i]; z = yv[j]
+        if abs(x - cenx) <= halfx && abs(z - cenz) <= halfz
+            @inbounds mask[i, j] = 1
+            @inbounds value[i, j] = v_val
         end
     end
     return nothing
+end
+
+# Build a `VelocityBoundaryConditions` with the interior `dirichlet` region set
+# from `boxes`. Call this once per timestep before `solve_DYREL!` -- rebuilding
+# it is cheap (a couple of small array allocations + a `@parallel` mask pass),
+# and picks up any change to `boxes` (e.g. a ramped-up prescribed velocity)
+# immediately.
+#
+# Uses `DirichletBoundaryCondition(value, Mask(mask))` directly (not the
+# `(; constant, mask)` shorthand) so that a box prescribing exactly zero
+# velocity is still correctly marked as constrained -- the shorthand's
+# array form infers its mask from non-zero value entries, which cannot
+# represent a prescribed value of exactly zero.
+function velocity_box_flow_bcs(
+        stokes, grid, boxes::Vector{VelBox2D};
+        free_slip = (left = true, right = true, top = true, bot = true),
+        free_surface = false,
+    )
+    Vx, Vy = @velocity(stokes)
+    xvx, yvx = grid.xi_vel[1]
+    xvy, yvy = grid.xi_vel[2]
+
+    mask_x, value_x = @zeros(size(Vx)...), @zeros(size(Vx)...)
+    mask_y, value_y = @zeros(size(Vy)...), @zeros(size(Vy)...)
+
+    for box in boxes
+        halfx, halfz = box.widthx / 2, box.widthz / 2
+        if box.has_vx
+            @parallel (@idx size(mask_x)) _mark_vbox!(mask_x, value_x, xvx, yvx, box.cenx, box.cenz, halfx, halfz, box.vx)
+        end
+        if box.has_vy
+            @parallel (@idx size(mask_y)) _mark_vbox!(mask_y, value_y, xvy, yvy, box.cenx, box.cenz, halfx, halfz, box.vy)
+        end
+    end
+
+    dirichlet = (;
+        Vx = JustRelax.DirichletBoundaryCondition(value_x, JustRelax.Mask(mask_x)),
+        Vy = JustRelax.DirichletBoundaryCondition(value_y, JustRelax.Mask(mask_y)),
+    )
+    return VelocityBoundaryConditions(; free_slip = free_slip, free_surface = free_surface, dirichlet = dirichlet)
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -369,8 +302,10 @@ function main(
         backend, rheology, phase_ratios, args0, dt, ni, di_min, li; ϵ = 1.0e-8, CFL = 0.95 / √2
     )
 
-    # Boundary conditions
-    flow_bcs = VelocityBoundaryConditions(;
+    # Boundary conditions (includes the internal velocity-box dirichlet region,
+    # rebuilt each timestep below as the boxes ramp up -- see velocity_box_flow_bcs above)
+    flow_bcs = velocity_box_flow_bcs(
+        stokes, grid, vel_boxes_2D;
         free_slip = (left = true, right = true, top = true, bot = true),
         free_surface = false,
     )
@@ -386,7 +321,6 @@ function main(
     τyy_v = @zeros(ni .+ 1...)
 
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
-    mask_vbox_c = @zeros(ni...)
 
     # Time loop
     t, it = 0.0, 0
@@ -419,8 +353,14 @@ function main(
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
 
-        # Prescribe velocity boxes before solve so solver finds a solution consistent with them
-        apply_vel_boxes!(stokes, grid, vel_boxes_2D, mask_vbox_c)
+        # Rebuild flow_bcs' internal velocity-box dirichlet region so it picks up any
+        # change to vel_boxes_2D (e.g. the ramped-up prescribed velocity at it==5,10,15);
+        # solve_DYREL! itself re-asserts the prescribed value every DR iteration.
+        flow_bcs = velocity_box_flow_bcs(
+            stokes, grid, vel_boxes_2D;
+            free_slip = (left = true, right = true, top = true, bot = true),
+            free_surface = false,
+        )
         update_halo!(@velocity(stokes)...)
 
         # Stokes solver ----------------
@@ -446,8 +386,6 @@ function main(
                     λ_relaxation_PH = 1,
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1.0e-2,
-                    apply_velocity_box = stokes -> apply_vel_boxes!(stokes, grid, vel_boxes_2D, mask_vbox_c),
-                    mask_vbox_center = mask_vbox_c,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
@@ -692,8 +630,8 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
-# version = "v0.357_computedensfix_interactivenode"
+# version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
+version = "v0.370_newvelbox4"
 println("version is $version")
 
 # MODEL SETUP
