@@ -505,6 +505,11 @@ igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
+function edge_pad(x::AbstractVector, lo_val, hi_val)
+    lo = similar(x, 1); lo .= lo_val
+    hi = similar(x, 1); hi .= hi_val
+    return vcat(lo, x, hi)
+end
 
 function velocity_grids_gpu(xci, xvi, di)
     dxW = sum(@view di[1][1:1]);   dyW = sum(@view di[2][1:1])
