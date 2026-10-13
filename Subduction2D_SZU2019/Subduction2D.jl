@@ -1,5 +1,3 @@
-# Load script dependencies
-using GeoParams, CairoMakie, LinearAlgebra, HDF5
 const isCUDA = true
 
 remote = true
@@ -32,15 +30,54 @@ else
 end
 
 using JustPIC
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend_JP = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+# GPU-safe copy for CellArrays (works around JustPIC 0.7.14 resample! scalar indexing)
+Base.copy(x::JustPIC.CellArrays.CellArray) = typeof(x)(copy(x.data), size(x))
+
+# Workaround JustPIC 0.7.14 / GridGeometryUtils 0.3.1: recentering loses ~1e-10 m on
+# refined grids, so chain endpoints miss the cell edges. Every caller passes a chord
+# spanning the full cell width, so snap its x-ends onto the side edges exactly.
+const GGU = JustPIC.GridGeometryUtils
+@inline function JustPIC.recenter_on_cell(s::GGU.Segment, r::GGU.Rectangle{T}) where {T}
+    oy = r.center[2]
+    hl = r.l / 2
+    s_local = GGU.Segment(GGU.Point(-hl, s.p1[2] - oy), GGU.Point(hl, s.p2[2] - oy))
+    return s_local, GGU.Rectangle((zero(T), zero(T)), r.l, r.h; θ = zero(T))
+end
+# JustRelax's markerchain phase correction (update_phases_given_markerchain!) assumes a
+# uniform grid twice: it picks rows with a uniform dy (misses the surface) and finds the
+# chain column with a uniform-dx `cell_index` (compares particles against the wrong part
+# of the chain, empties cells -> NaN). Patch both. The GPU path runs its own copy of these
+# functions inside the CUDA extension module, so patch that module as well.
+const JR2D_modules = @static if isCUDA
+    (JustRelax.JustRelax2D, Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax2D)
+else
+    (JustRelax.JustRelax2D,)
+end
+for M in JR2D_modules
+    @eval begin
+        # search all rows (clamped inside the kernel)
+        $M.find_minmax_cell_indices(chain_yi, origin_y, di) = (11, 10^9)
+        # same function, but with JustPIC's refined-grid (bisection) column lookup
+        @inline function $M.is_above_chain(xq, yq, coords, cell_vertices)
+            I = JustPIC.parent_cell_index(xq, cell_vertices, JustPIC.midpoint_seed(cell_vertices))
+            x_cell, y_cell = coords[1][I], coords[2][I]
+            ychain = if 1 < I[1] < length(cell_vertices) - 1
+                JustPIC.interp1D_inner(xq, x_cell, y_cell, coords, I)
+            else
+                JustPIC.interp1D_extremas(xq, x_cell, y_cell)
+            end
+            return yq > ychain
+        end
+    end
 end
 
+# Load script dependencies
+using GeoParams, CairoMakie, LinearAlgebra, HDF5, PoissonGrids
 include(joinpath(working_dir, "LocalModules/visualisation.jl"))
 include(joinpath(working_dir, "LocalModules/VelocityBoxes.jl"))
 include(joinpath(working_dir, "LocalModules/HelperFunctions.jl"))
@@ -78,6 +115,131 @@ end
     @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
     return nothing
 end
+
+"""
+    topo_y(x_km)
+
+Initial air/rock interface matching the "Air temperature" polygon in
+`GMG_subduction_2D_with_coords`: flat at -12.5 km for x ≤ 854 km,
+flat at -8 km for x ≥ 954 km, linearly ramped between them.
+Input and output are both in km.
+"""
+function topo_y(x_km::Real)
+    x_left, x_right = 854.0, 954.0
+    z_left, z_right = -12.5, -8.0
+    if x_km <= x_left
+        return z_left
+    elseif x_km >= x_right
+        return z_right
+    else
+        t = (x_km - x_left) / (x_right - x_left)
+        return z_left + t * (z_right - z_left)
+    end
+end
+
+function particle_report(pT, particles, thermal, xvi; nshow = 15, label = "")
+    xv, yv = Array(xvi[1]), Array(xvi[2])
+    nx, ny = length(xv) - 1, length(yv) - 1
+    xc = 0.5 .* (xv[1:(end - 1)] .+ xv[2:end])
+    yc = 0.5 .* (yv[1:(end - 1)] .+ yv[2:end])
+    # Ghost centroid *positions* only (mirrored across the boundary vertex, one
+    # extra half-cell out), matching the layout of the padded (nx+2, ny+2)
+    # `thermal.T` array. This placement is just geometry and holds for every
+    # boundary alike -- it says nothing about what *value* ends up at the ghost.
+    # That value comes from `T` below (the real, already-BC'd field): top/bot
+    # are `constant_value` (Tghost = 2*face_value - Tint), left/right are
+    # `no_flux` (Tghost = Tint, a plain copy) -- see thermal_bcs!/free_slip!.
+    xcg = [2xv[1] - xc[1]; xc; 2xv[end] - xc[end]]
+    ycg = [2yv[1] - yc[1]; yc; 2yv[end] - yc[end]]
+
+    T = Array(thermal.T)                      # (nx+2, ny+2), matches xcg × ycg
+    Tmin, Tmax = extrema(@view T[2:(end - 1), 2:(end - 1)])
+
+    println("\n=== particle report: $label ===")
+    println("particle fields: ", propertynames(particles))
+    hasproperty(particles, :di)  && println("particles.di type: ", typeof(particles.di))
+    hasproperty(particles, :xci) && println("particles.xci[1][1:3] = ", Array(particles.xci[1])[1:3],
+                                            "   my ghosted xc[1:3] = ", xcg[1:3])
+    same = size(particles.index) == (nx, ny)
+    println("particle cell grid ", size(particles.index), "  vs grid cells ", (nx, ny))
+
+        # copy particle data to host once (works for CPU and GPU)
+    idxd = Array(particles.index.data)
+    pxd  = Array(particles.coords[1].data)
+    pyd  = Array(particles.coords[2].data)
+    Td   = Array(pT.data)
+    ncell = prod(size(particles.index))
+    @assert size(idxd, 1) == ncell "unexpected CellArray layout: $(size(idxd))"
+    CI = CartesianIndices(size(particles.index))
+
+    # JustPIC pads its cell grid by one cell per side: particle cell (i, j) = grid cell (i-1, j-1)
+    same = size(particles.index) == (nx + 2, ny + 2)
+
+    rows = NamedTuple[]
+    nact = nabove = nbelow = nwrong = nout = 0
+    maxerr = 0.0
+    for c in 1:ncell, ip in axes(idxd, 2)
+        idxd[c, ip, 1] || continue
+        nact += 1
+        i, j = Tuple(CI[c])
+        x, y, Tp = pxd[c, ip, 1], pyd[c, ip, 1], Td[c, ip, 1]
+        interior = same && 2 <= i <= nx + 1 && 2 <= j <= ny + 1
+
+        (xv[1] <= x <= xv[end] && yv[1] <= y <= yv[end]) || (nout += 1)
+        interior && !(xv[i - 1] <= x <= xv[i] && yv[j - 1] <= y <= yv[j]) && (nwrong += 1)
+
+        # reference bilinear interpolation on the ghosted centroid grid
+        ic = clamp(searchsortedlast(xcg, x), 1, length(xcg) - 1)
+        jc = clamp(searchsortedlast(ycg, y), 1, length(ycg) - 1)
+        tx = (x - xcg[ic]) / (xcg[ic + 1] - xcg[ic])
+        ty = (y - ycg[jc]) / (ycg[jc + 1] - ycg[jc])
+        Tref = (1 - tx) * (1 - ty) * T[ic, jc]     + tx * (1 - ty) * T[ic + 1, jc] +
+               (1 - tx) * ty       * T[ic, jc + 1] + tx * ty       * T[ic + 1, jc + 1]
+        err = Tp - Tref
+        maxerr = max(maxerr, abs(err))
+        Tp > Tmax + 1e-6 && (nabove += 1)
+        Tp < Tmin - 1e-6 && (nbelow += 1)
+
+        if abs(err) > 1.0 || Tp > Tmax + 1e-6 || Tp < Tmin - 1e-6
+            # Which face's ghost (if any) this interpolation bracket touches.
+            # A corner interpolation can touch two faces at once, hence a Vector.
+            touches = Symbol[]
+            ic == 1               && push!(touches, :left)
+            ic == length(xcg) - 1 && push!(touches, :right)
+            jc == 1               && push!(touches, :bot)
+            jc == length(ycg) - 1 && push!(touches, :top)
+            push!(rows, (; x_km = x / 1e3, y_km = y / 1e3, cell = (i, j),
+                dx_km = interior ? (xv[i] - xv[i - 1]) / 1e3 : NaN,
+                dy_km = interior ? (yv[j] - yv[j - 1]) / 1e3 : NaN,
+                Tp, Tref, err, touches))
+        end
+    end
+
+    println("active particles: $nact | outside domain: $nout | in wrong cell: $nwrong")
+    println("grid interior T range: ", (Tmin, Tmax))
+    println("particles above grid max: $nabove | below grid min: $nbelow")
+    nghost = count(r -> !isempty(r.touches), rows)
+    println("max |pT - Tref| = $maxerr | flagged: ", length(rows),
+            " (", round(100 * length(rows) / max(nact, 1), digits = 1), "% of active) | touching a ghost: ", nghost)
+    if !isempty(rows)
+        for face in (:left, :right, :top, :bot)
+            n = count(r -> face in r.touches, rows)
+            n > 0 && println("  touching $face ghost: $n")
+        end
+        println("flagged x range [km]: ", extrema(r.x_km for r in rows),
+                "  y range [km]: ", extrema(r.y_km for r in rows))
+        sort!(rows; by = r -> -abs(r.err))
+        println("worst $nshow:")
+        for r in rows[1:min(nshow, end)]
+            tag = isempty(r.touches) ? "" : "  [$(join(r.touches, ","))]"
+            println("  x=", round(r.x_km, digits = 2), " y=", round(r.y_km, digits = 2),
+                    " cell=", r.cell, " dx=", round(r.dx_km, digits = 2), " dy=", round(r.dy_km, digits = 2),
+                    " | pT=", round(r.Tp, digits = 1), " Tref=", round(r.Tref, digits = 1),
+                    " err=", round(r.err, digits = 1), tag)
+        end
+    end
+    return rows
+end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -87,8 +249,7 @@ function main(
     phases_GMG,
     T_GMG,
     igg;
-    xvi = nothing,
-    xci = nothing,
+    vertices = nothing,
     nx = 16,
     ny = 16,
     ref_grid = 0,
@@ -96,31 +257,32 @@ function main(
 )
 
     # Physical domain ------------------------------------
-    ni = nx, ny           # number of cells
-
+    ni = nx, ny            # number of cells
+    di = @. li / ni        # grid step in x- and -y
+    grid0 = Geometry(ni, li; origin = origin)
+    di_min = @. li / ni       # grid steps
     # non-uniform grid with refinement
-    if ref_grid == 1
-        grid = Geometry(
-            PTArray(backend_JR),
-            xvi...,
+    grid = Geometry(
+        PTArray(backend_JR),
+        vertices...
         )
-        di_min =  (min(minimum.(grid.di.center)...),
-        min(minimum.(grid.di.vertex)...))
-    else
-        grid = Geometry(ni, li; origin = origin)
-        di_min = @. li / ni       # grid steps
-    end
-    
+    di_min = min(
+        min(minimum.(grid.di.center)...),
+        min(minimum.(grid.di.vertex)...),
+    )
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-
     # ----------------------------------------------------
-    # Set flags and parameters for visualization and output and create folders for output
+    # visualisation subroutine
     vis = prepare_visualisation(ni, version=version)
-
+    let
+        dx, dz = Array(grid.di.vertex[1]), Array(grid.di.vertex[2])
+        ar = [dx[i] / dz[j] for i in eachindex(dx), j in eachindex(dz)]
+        println("max cell aspect ratio dx/dz = ", maximum(ar), " at ", Tuple(argmax(ar)))
+    end
     # Physical properties using GeoParams ----------------
     rheology = init_rheologies_start()
     dt = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
-    dt_max = 25.0e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt_max = 25e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -133,11 +295,11 @@ function main(
     # indexing in `add_periodic_ghost_nodes`.
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell,
-        map(t -> Array.(t), grid.xi_vel)...
+        map(t -> Array.(t), grid.xi_vel)...;
+        periodic = (false, false)
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
-    # grid_vxi = velocity_grids(xci, xvi, grid.di.vertex)
-    grid_vxi = velocity_grids_gpu(xci, xvi, grid.di.vertex)
+    # grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
 
@@ -150,8 +312,26 @@ function main(
     phases_device = PTArray(backend)(phases_GMG)
     phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, phases_device, particles, xvi)
+    # ### == Markerchain
+    initial_elevation = -8.0e3
+    n_chain = round(Int, nx+1)  # or whatever resolution you want for the interface
+    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, PTArray(backend)(xvi[1]), initial_elevation)
+
+    # # chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+    air_phase = 2
+    topo_y_vec = topo_y.(xvi[1] ./ 1.0e3) .* 1.0e3
+    fill_chain_from_vertices!(chain, PTArray(backend)(topo_y_vec))
+    @show extrema(Array(chain.h_vertices))
+    @show size(Array(chain.h_vertices))
+    @show extrema(topo_y_vec)
+    # update_phases_given_markerchain!(pPhases, chain, particles, origin, grid.di, air_phase)
+    # # end
+
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
+    ϕ = RockRatio(backend, ni)
+    # update_rock_ratio!(ϕ, phase_ratios, air_phase)
+    compute_rock_fraction!(ϕ, chain, xvi, grid.di.vertex)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -163,9 +343,12 @@ function main(
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
     vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
+
     thermal_bc = TemperatureBoundaryConditions(;
+        # no_flux = (left = true, right = true, top = true, bot = true),
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
+        # constant_value = (left = false, right = false, top = false, bot = false),
     )
     thermal_bcs!(thermal, thermal_bc)
     # ----------------------------------------------------
@@ -173,11 +356,16 @@ function main(
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
+    # Lithostatic pressure: integrate ρg down each column into the cell-centered P.
+    # `compute_lithostatic_pressure!` adds the -w/2 half-cell correction and tolerates
+    # a scalar or a per-cell dz vector, so it works for both grid modes. A single
+    # non-finite ρg cell no longer smears a NaN over the whole column the way the old
+    # hand-rolled `reverse(cumsum(reverse(...)))` did.
     if ref_grid == 0
-        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di_min[2], dims = 2), dims = 2), dims = 2))
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di_min[2], igg)
     else
-        # Lithostatic pressure integrates vertical body force using local cell dy (vertex spacing).
-        stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* reshape(grid.di.vertex[2], 1, :), dims = 2), dims = 2), dims = 2))
+        # Non-uniform vertical spacing: pass the per-cell heights (length ny).
+        compute_lithostatic_pressure!(stokes.P, ρg[2], grid.di.vertex[2], igg)
     end
 
     # Rheology
@@ -189,7 +377,7 @@ function main(
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args0, dt, ni, di_min, li; ϵ = 1.0e-8, CFL = 0.95 / √2
+        backend, rheology, phase_ratios, args0, dt, ni, minimum.(grid.di.vertex), li; ϵ = 1.0e-12, CFL = 0.7 / √2
     )
 
     # Boundary conditions (includes the internal velocity-box dirichlet region,
@@ -203,42 +391,33 @@ function main(
     update_halo!(@velocity(stokes)...)
 
     # visualization prep moved to LocalModules/visualisation.jl
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
-
-    τxx_v = @zeros(ni .+ 1...)
-    τyy_v = @zeros(ni .+ 1...)
-
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
+    centroid2particle!(pT, thermal.T, particles)
+    # dt₀ = similar(thermal.T)
+    # AI assisted implement. verify.
+    dt₀_center = similar(stokes.P)   # plain (nx, ny), matches what subgrid_characteristic_time! expects
+    dt₀         = similar(thermal.T) # ghost-padded (nx+2, ny+2), for centroid2particle! below
 
     # Time loop
     t, it = 0.0, 0
-    while it <= 2000 || t < 4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
-        if it == 5
-            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 2.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
+
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
+
+    while t < 4.4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
+        if it == 4
             rheology = init_rheologies()
-        elseif it == 10
-            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 5.0 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
-        elseif it == 15
-            vel_boxes_2D[1] = VelBox2D(vel_boxes_2D[1].cenx, vel_boxes_2D[1].cenz, vel_boxes_2D[1].widthx, vel_boxes_2D[1].widthz, 7.5 * 0.01 / (3600*24*365), vel_boxes_2D[1].vy, true, vel_boxes_2D[1].has_vy)
         end
         # Get flat views of the raw data
         phases_flat = pPhases.data[:]   # all particle phase values
         temps_flat  = pT.data[:]        # all particle temperatures
         index_flat  = particles.index.data[:]  # true = active particle
-        # Find active air particles
         air_mask = (phases_flat .== 2.0) .& index_flat
-        @show sum(air_mask)
-        @show extrema(temps_flat[air_mask])
-        @show mean(temps_flat[air_mask])   # needs Statistics
-        # Set air particle temperatures to 273 K
         pT.data[air_mask] .= 273.0
+        pT_active = Array(pT.data)[Array(particles.index.data)]
 
-        # interpolate fields from particle to grid vertices
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:end-1, 2:end-1] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
+        thermal.T .= clamp.(thermal.T, Ttop - 50.0, Tbot + 50.0)
+
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
 
@@ -268,7 +447,7 @@ function main(
                 igg;
                 kwargs = (;
                     verbose_PH = true,
-                    verbose_DR = true,
+                    verbose_DR = false,
                     iterMax = 50.0e2,
                     rel_drop = 1.0e-2,
                     nout = 400,
@@ -276,10 +455,12 @@ function main(
                     λ_relaxation_DR = 1,
                     viscosity_relaxation = 1.0e-2,
                     viscosity_cutoff = viscosity_cutoff,
+                    free_surface = true,
+                    debug=false
                 )
             )
         end
-        # print some stuff
+
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
@@ -288,7 +469,9 @@ function main(
         rotate_stress!(pτ, stokes, particles, dt)
         # compute time step
         dt_plot = dt
-        dt = compute_dt(stokes, di_min, dt_max) #* 0.8
+        dt = compute_dt(stokes, di_min, dt_max)
+        println("dt kyr= ", dt/365.25/24/3600/1000, "  finite = ", isfinite(dt), "  positive = ", dt > 0)
+
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
@@ -307,46 +490,102 @@ function main(
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,
-                iterMax = 50.0e3,
+                iterMax = 50.0e5,
                 nout = 1.0e2,
-                verbose = true,
+                verbose = false,
             )
         )
-        subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
-        )
-        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
-        )
-        # ------------------------------
+        thermal.T .= clamp.(thermal.T, Ttop - 50.0, Tbot + 50.0)
 
+
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀_center, phase_ratios, rheology, thermal, stokes
+        )
+        @views dt₀[2:end-1, 2:end-1] .= dt₀_center   # copy into the padded array at the correct offset
+        @views dt₀[1, :]   .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1]   .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+
+        subgrid_diffusion_centroid!(
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+        )
+        pT.data   .= clamp.(pT.data, Ttop - 50.0, Tbot + 50.0)
+
+        # ------------------------------
         # Advection --------------------
         # advect particles in space
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        # need stresses on the vertices for injection purposes
-        inject_particles_phase!(
-            particles,
-            pPhases,
-            particle_args_reduced,
-            (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy)
-        )
+        # Inject phase labels first, then initialize every newly injected particle field
+        # through the regular centroid/vertex interpolation paths.
+        inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,))
+
+        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles; ghosted = false)
+        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles; ghosted = false)
+        grid2particle!(pτ.τ_shear[1], stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
+        grid2particle!(pτ.ω[1], stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
+
+        # # advect marker chain
+        # semi-Lagrangian update with slope limiter: stops the chain forming a near-vertical
+        # cliff at the plate boundary (x ≈ 854 km); mean height free to change
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, xvi, dt;
+            max_slope_angle = 30.0, conserve_mean = false)
+        # advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+        # update_phase_ratios!(phase_ratios, particles, pPhases)
+        update_rock_ratio!(ϕ, phase_ratios, air_phase)
+
+        compute_rock_fraction!(ϕ, chain, xvi, grid.di.vertex)        # if it == 1
+        #     @show extrema(Array(chain.h_vertices))
+        #     @show extrema(Array(xvi[1]))
+        #     @show Array(chain.h_vertices)
+        # end
 
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, pPhases)
+        particle_report(pT, particles, thermal, xvi; label = "end_of_time_step")
+        let h = Array(chain.h_vertices), x = Array(chain.cell_vertices)
+            s = atand.(abs.(diff(h) ./ diff(x)))
+            println("chain max slope = ", maximum(s), "° at x = ", x[argmax(s)] / 1e3, " km")
+        end
+
+
+        @show it += 1
+        t += dt
         ### PARAVIEW PLOTTING
         if it == 1 || rem(it, 25) == 0
-            checkpointing_jld2(vis.checkpoint, stokes, thermal, t, dt; it = it)
-            checkpointing_particles(vis.checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+            checkpointing_hdf5(vis.checkpoint, stokes, thermal.T, t, dt)
+            # checkpointing_particles(vis.checkpoint, particles; phases = pPhases, phase_ratios = phase_ratios, particle_args = particle_args, particle_args_reduced = particle_args_reduced, t = t, dt = dt, it = it)
+
+            # ppx, ppy = particles.coords
+            # fname = joinpath(vis.figdir, "marker_$(lpad(it,6,'0')).h5")
+            # HDF5.h5open(fname, "w") do file
+            #     mg = HDF5.create_group(file, "MarkerGroup")
+            #     mg["markx"] = Array(ppx.data[:])
+            #     mg["marky"] = Array(ppy.data[:])
+            #     mg["markt"] = Array(pPhases.data[:])
+
+            #     modelg = HDF5.create_group(file, "ModelGroup")
+            #     modelg["Model"] = [t]
+            # end
         end
         (; η_vep, η) = stokes.viscosity
+        save_marker_chain(
+            joinpath(vis.vtk_dir, "chain_" * lpad("$it", 6, "0")),
+            Array(chain.cell_vertices),
+            Array(chain.h_vertices);
+            pvd = joinpath(vis.vtk_dir, "MarkerChain.pvd"),
+            t = t,
+        )
+        # save_marker_chain_hdf5(joinpath(vis.vtk_dir, "chain_$(lpad(it,3,'0'))"), chain; t = t)
         if vis.do_vtk && (it == 1 || rem(it, vis.vtk_every) == 0)
             velocity2vertex!(vis.Vx_v, vis.Vy_v, @velocity(stokes)...)
             # Reconstruct compact phase "shapes" on the grid from particle phase ratios.
-            phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)]
+            pv = Array(phase_ratios.vertex.data)        # (cells, nphases, 1)
+            phase_vertex = reshape([argmax(@view pv[c, :, 1]) for c in axes(pv, 1)], size(phase_ratios.vertex))
             Rx_c = zeros(size(stokes.P))
             Ry_c = zeros(size(stokes.P))
             @views Rx_c[axes(stokes.R.Rx, 1), axes(stokes.R.Rx, 2)] .= Array(stokes.R.Rx)
@@ -365,7 +604,7 @@ function main(
                 θr_dτ          = Array(pt_thermal.θr_dτ),
             )
             data_c = (;
-                T_buffer   = Array(T_buffer),
+                # T_buffer   = Array(T_buffer),
                 thermal_T = Array(thermal.T[2:end-1,2:end-1]),
                 P   = Array(stokes.P),
                 P0   = Array(stokes.P0),
@@ -455,7 +694,7 @@ function main(
             make_figure(
                 it, t, dt_plot,
                 xvi, xci,
-                T_buffer, ρg,
+                thermal.T[2:end-1,2:end-1], ρg,
                 stokes,
                 Vx_limited, Vy_limited,
                 pxv, pyv, clr, idxv,
@@ -467,7 +706,7 @@ function main(
             make_figure(
                 it, t, dt_plot,
                 xvi, xci,
-                T_buffer, ρg,
+                thermal.T[2:end-1,2:end-1], ρg,
                 stokes,
                 Vx_limited, Vy_limited,
                 pxv, pyv, clr, idxv,
@@ -475,8 +714,6 @@ function main(
                 joinpath(vis.figdir, "zoom", "zoom_$(lpad(it, 2, "0")).png"), version=version
             )
         end
-        @show it += 1
-        t += dt
     end
         # ------------------------------
     return nothing
@@ -484,16 +721,19 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
-# version = "v0.357_computedensfix_interactivenode"
+# version = "v0.389_justpic0.7.14_interactive"
 println("version is $version")
 
 # MODEL SETUP
-nx, ny = 900, 220
+nx, ny = 1049, 269
+# nx, ny = 3000, 520
+# nx, ny = 300, 52
+
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
 ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
 
 # GENERATE GRID
-li, origin, phases_GMG, T_GMG, xvi, xci = GMG_subduction_2D_with_coords(
+li, origin, phases_GMG, T_GMG, (xv, yv) = GMG_subduction_2D_with_coords(
     nx + 1,
     ny + 1;
     ref_grid = ref_grid,
@@ -505,37 +745,17 @@ igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
 else
     igg
 end
-function edge_pad(x::AbstractVector, lo_val, hi_val)
-    lo = similar(x, 1); lo .= lo_val
-    hi = similar(x, 1); hi .= hi_val
-    return vcat(lo, x, hi)
-end
 
-function velocity_grids_gpu(xci, xvi, di)
-    dxW = sum(@view di[1][1:1]);   dyW = sum(@view di[2][1:1])
-    dxE = sum(@view di[1][end:end]); dyE = sum(@view di[2][end:end])
-
-    x0 = sum(@view xci[1][1:1]);   xN = sum(@view xci[1][end:end])
-    y0 = sum(@view xci[2][1:1]);   yN = sum(@view xci[2][end:end])
-
-    xghost = edge_pad(xci[1], x0 - dxW, xN + dxE)
-    yghost = edge_pad(xci[2], y0 - dyW, yN + dyE)
-
-    grid_vx = xvi[1], yghost
-    grid_vy = xghost, xvi[2]
-
-    return grid_vx, grid_vy
-end
 main(
     li,
     origin,
     phases_GMG,
     T_GMG,
     igg;
-    xvi = xvi,
-    xci = xci,
+    vertices = (xv, yv),
     nx = nx,
     ny = ny,
     version = version,
     ref_grid = ref_grid,
 );
+

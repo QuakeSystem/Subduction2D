@@ -6,21 +6,20 @@ needed by the DYREL grid setup:
 `xvi` (staggered/vertex coordinates) and `xci` (cell-center coordinates) in meters.
 
 The non-uniform axis refinement itself lives in NonuniformGrid.jl
-(`nonuniform_coords_1d` / `logistic_vertices`) -- this function just supplies
-the subduction-specific defaults and geometry (phases, temperature fields).
+(`poisson_coords_1d`, built on PoissonGrids.jl's `solve_grid`) -- this function
+just supplies the subduction-specific monitors, defaults, and geometry (phases,
+temperature fields).
 """
 function GMG_subduction_2D_with_coords(
         nx_vertices::Int,
         ny_vertices::Int;
         ref_grid::Int = 0,
-        refine_factor_x::Float64 = 20.0,
-        refine_factor_y::Float64 = 30.0,
-        w_ref_ratio_x::Float64 = 660.0 / 1500.0,   # 0.4167
-        w_ref_ratio_y::Float64 = 170.0 / 260.0,    # 0.5385
-        k_x::Float64 = 25.0,
-        k_y::Float64 = 20.0,
-        x_center_frac::Float64 = 785.0 / 1500.0,   # 0.5333 -- not the window's geometric center, see note below
-        y_center_frac::Float64 = (-80.0 - (-260.0)) / 260.0,  # 0.6923
+        h_fine::Float64 = 0.5,                        # km, target resolution inside the refined zones
+        h_coarse::Float64 = 4.0,                      # km, background resolution away from the zones
+        κ_x::Float64 = 0.05,                           # x transition sharpness [1/km]; larger = shorter transition, more stretching
+        κ_z::Float64 = 0.05,                           # z transition sharpness [1/km]
+        x_zone::NTuple{2, Float64} = (800.0, 1100.0),  # refined x range [km] -- must bracket the trench/slab geometry
+        z_zone::NTuple{2, Float64} = (-80.0, 0.0),     # refined z range [km] -- top of the domain
         verbose::Int = 1,
     )
     model_depth = 260.0 # km
@@ -30,28 +29,25 @@ function GMG_subduction_2D_with_coords(
     air_thickness = 0.0
     z0_km, z1_km = -model_depth * 1.0, air_thickness
 
+    # Monitor contrast: cell width ~ 1/M, so M = 1 + α inside the refined zone and
+    # M = 1 outside it gives a fine/coarse width ratio of h_coarse/h_fine.
+    α = h_coarse / h_fine - 1.0
+
     # Our coordinate arrays are "points" for CartData: xvi has length nx_vertices.
-    x = nonuniform_coords_1d(
-        nx_vertices,
-        x0_km,
-        x1_km;
-        ref_grid = ref_grid,
-        refine_factor = refine_factor_x,
-        w_ref_ratio = w_ref_ratio_x,
-        x_center_frac = x_center_frac,
-        k = k_x,
-        verbose = verbose,
+    # Each tanh edge is pushed outward by 1.5/κ so the zone sits on the monitor's
+    # plateau (M ≥ ~0.95 * max) rather than on its transition slope.
+    δx = 1.5 / κ_x
+    Mx = window_monitor(α, κ_x, (x_zone[2] - x_zone[1]) / 2 + δx, sum(x_zone) / 2)
+    x = poisson_coords_1d(
+        nx_vertices, x0_km, x1_km;
+        ref_grid = ref_grid, monitor = Mx, verbose = verbose, label = "x",
     )
-    z = nonuniform_coords_1d(
-        ny_vertices,
-        z0_km,
-        z1_km;
-        ref_grid = ref_grid,
-        refine_factor = refine_factor_y,
-        w_ref_ratio = w_ref_ratio_y,
-        x_center_frac = y_center_frac,
-        k = k_y,
-        verbose = verbose,
+
+    δz = 1.5 / κ_z
+    Mz = tanh_monitor(α, κ_z, z_zone[1] - δz)  # 1 → 1+α for z > z_zone[1], so the surface stays fine
+    z = poisson_coords_1d(
+        ny_vertices, z0_km, z1_km;
+        ref_grid = ref_grid, monitor = Mz, verbose = verbose, label = "z",
     )
 
     Grid2D = CartData(xyz_grid(x, 0, z))
@@ -281,11 +277,11 @@ function GMG_subduction_2D_with_coords(
     # Staggered grid coordinate vectors in meters:
     # - xvi are vertices (length nx_vertices)
     # - xci are cell centers (length nx_vertices-1)
-    xvi = (x .* 1.0e3, z .* 1.0e3)
-    xci = (
-        0.5 .* (x[1:(end - 1)] .+ x[2:end]) .* 1.0e3,
-        0.5 .* (z[1:(end - 1)] .+ z[2:end]) .* 1.0e3,
-    )
+    xv, yv = (x .* 1.0e3, z .* 1.0e3)
+    # xci = (
+    #     0.5 .* (x[1:(end - 1)] .+ x[2:end]) .* 1.0e3,
+    #     0.5 .* (z[1:(end - 1)] .+ z[2:end]) .* 1.0e3,
+    # )
 
-    return li, origin, ph, T, xvi, xci
+    return li, origin, ph, T, (xv, yv)
 end

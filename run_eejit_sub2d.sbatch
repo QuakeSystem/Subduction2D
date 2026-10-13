@@ -4,8 +4,7 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --threads-per-core=1
 #SBATCH --gres=gpu
-#SBATCH --exclude=gpu045
-#SBATCH --partition=gpu
+#SBATCH --partition=gpu6000
 #SBATCH --nodes=1
 #SBATCH -o job.%N.%j.%x.out  # STDOUT
 #SBATCH -e job.%N.%j.%x.err  # STDERR
@@ -61,7 +60,8 @@ echo "Current working directory is `pwd`"
 echo "  submitting the first job: `date` "
 
 # Enable below to enforce recompiling. Useful if you changed something in the JR fork and want to guarantee a reset
-rm -rf /scratch/tectonics/bert/julia_local/julia_depot/compiled/v1.*/JustRelax*
+# rm -rf /scratch/tectonics/bert/julia_local/julia_depot/compiled/v1.*/JustRelax*
+export UCX_ERROR_SIGNALS=""
 
 julia --project ./Subduction2D_SZU2019/Subduction2D.jl
 # julia --project=. ./old_versions/justrelax/v0.8.0/original/Subduction2D_DYREL.jl

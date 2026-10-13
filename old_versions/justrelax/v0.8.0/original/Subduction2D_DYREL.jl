@@ -5,7 +5,7 @@ const isCUDA = false
     using CUDA
 end
 
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO, Statistics
 # using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
@@ -111,13 +111,18 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # TEMPERATURE PROFILE --------------------------------
     Ttop = 20 + 273
     Tbot = maximum(T_GMG)
+    println("T_top:", Ttop)
+    println("T_bot:", Tbot)
     thermal = ThermalArrays(backend, ni)
+    println("post initializing thermal.T  extrema = ", extrema(Array(thermal.T)), "  finite = ", all(isfinite, Array(thermal.T)))
     vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
+    println("post infill thermal.T  extrema = ", extrema(Array(thermal.T)), "  finite = ", all(isfinite, Array(thermal.T)))
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
     thermal_bcs!(thermal, thermal_bc)
+    println("post thermal bcs 1 thermal.T  extrema = ", extrema(Array(thermal.T)), "  finite = ", all(isfinite, Array(thermal.T)))
     # ----------------------------------------------------
 
     # Buoyancy forces
@@ -177,11 +182,30 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Time loop
     t, it = 0.0, 0
     while it < 1000 # run only for 5 Myrs
+        phases_flat = pPhases.data[:]   # all particle phase values
+        temps_flat  = pT.data[:]        # all particle temperatures
+        index_flat  = particles.index.data[:]  # true = active particle
+        # Find active air particles
+        air_mask = (phases_flat .== 2.0) .& index_flat
+        @show sum(air_mask)
+        @show extrema(temps_flat[air_mask])
+        @show mean(temps_flat[air_mask])   # needs Statistics
+        # Set air particle temperatures to 273 K
+        pT.data[air_mask] .= 273.0
+        println("pre anything thermal.T  extrema = ", extrema(Array(thermal.T)), "  finite = ", all(isfinite, Array(thermal.T)))
+        println("pre anything T_buffer extrema = ", extrema(T_buffer), "  finite = ", all(isfinite, Array(T_buffer)))
+        pT_active = Array(pT.data)[Array(particles.index.data)]
+        println("pre anything pT extrema = ", extrema(pT_active), "  finite = ", all(isfinite, pT_active))
 
         # interpolate fields from particles to centroids
         particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
+
+        println("post bcs thermal.T  extrema = ", extrema(Array(thermal.T)), "  finite = ", all(isfinite, Array(thermal.T)))
+        println("post bcs T_buffer extrema = ", extrema(T_buffer), "  finite = ", all(isfinite, Array(T_buffer)))
+        pT_active = Array(pT.data)[Array(particles.index.data)]
+        println("post cords pT extrema = ", extrema(pT_active), "  finite = ", all(isfinite, pT_active))
 
         # interpolate stress back to the grid
         stress2grid!(stokes, pτ, particles)
@@ -217,7 +241,29 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
+        # --- diagnostics: state handed from Stokes into the thermal solver ---
+        let
+            Pc = Array(stokes.P)
+            Tc = Array(thermal.T)
+            Vx = Array(stokes.V.Vx)
+            Vy = Array(stokes.V.Vy)
 
+            println("P  extrema = ", extrema(Pc), "  finite = ", all(isfinite, Pc))
+            println("T  extrema = ", extrema(Tc), "  finite = ", all(isfinite, Tc))
+            println("Vx extrema = ", extrema(Vx), "  finite = ", all(isfinite, Vx))
+            println("Vy extrema = ", extrema(Vy), "  finite = ", all(isfinite, Vy))
+
+            if !all(isfinite, Pc)
+                println("first non-finite P at ", findfirst(!isfinite, Pc))
+            end
+            if !all(isfinite, Tc)
+                println("first non-finite T at ", findfirst(!isfinite, Tc))
+            end
+
+            imin = argmin(Pc)
+            imax = argmax(Pc)
+            println("min P = ", Pc[imin], " at ", imin, "   max P = ", Pc[imax], " at ", imax)
+        end
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, dt)
         # compute time step
@@ -242,7 +288,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 phase = phase_ratios,
                 iterMax = 50.0e3,
                 nout = 1.0e2,
-                verbose = true,
+                verbose = false,
             )
         )
         subgrid_characteristic_time!(
@@ -358,7 +404,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_DYREL"
+figdir = "Subduction2D_DYREL_moreinfo"
 n = 32
 nx, ny = n * 2, n
 
