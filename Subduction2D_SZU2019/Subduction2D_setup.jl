@@ -22,9 +22,9 @@ function GMG_subduction_2D_with_coords(
         z_zone::NTuple{2, Float64} = (-80.0, 0.0),     # refined z range [km] -- top of the domain
         verbose::Int = 1,
     )
-    model_depth = 260.0 # km
+    model_depth = 400.0 # km
     Tsurface = 20
-    Tbot = 1743 - 273.15 # K, 1445 C, from Katsura 2022 # increased by 25 since v0.271 for 260km depth
+    Tbot = 1796 - 273.15 # C, from Katsura 2022 400km deep
     x0_km, x1_km = 0.0, 1500.0
     air_thickness = 0.0
     z0_km, z1_km = -model_depth * 1.0, air_thickness
@@ -260,7 +260,7 @@ function GMG_subduction_2D_with_coords(
         cenz = -54.8 * 1.0e3,          # m
         widthx = 20 * 1.0e3,          # m
         widthz = 23.6 * 1.0e3,           # m
-        vx = 5 * 0.01 / (3600 * 24 * 365)             # m/s (optional)
+        vx = 7.5 * 0.01 / (3600 * 24 * 365)             # m/s (optional)
         #    vy     = -4.0e-9,                    # m/s (optional)
     )
 

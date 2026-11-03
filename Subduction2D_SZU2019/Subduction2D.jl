@@ -240,6 +240,76 @@ function particle_report(pT, particles, thermal, xvi; nshow = 15, label = "")
     end
     return rows
 end
+
+"""
+    open_surface_track(path)
+
+Open the per-step surface-track file and write its header. The rows follow the SZU2019
+marker-track column order (`eachdt_markertrack_lphr0.txt`), so the same loaders read both;
+`#` header lines are skipped by `np.loadtxt`.
+"""
+function open_surface_track(path)
+    io = open(path, "w")
+    println(io, "# time_s x_m depth_m exx_1_s exy_1_s phase dt_s vertex_id vx_m_s vy_m_s")
+    println(io, "# columns 1-8 as SZU2019 (exx, exy = strain-rate components); columns 9-10 added: velocity")
+    println(io, "# marker-chain surface at fixed grid-vertex x (vertex_id = vertex index); depth = -h, positive down")
+    println(io, "# exx, exy, vx, vy sampled half a cell below the surface (rock side); vx, vy in m/s, vy > 0 is up")
+    println(io, "# phase = dominant non-air phase of the cell at that sample point; dt_s = step that moves this state")
+    return io
+end
+
+# Bilinear interpolation of A on the rectilinear (possibly refined) grid xs × ys.
+function bilinear_rect(A, xs, ys, x, y)
+    i = clamp(searchsortedlast(xs, x), 1, length(xs) - 1)
+    j = clamp(searchsortedlast(ys, y), 1, length(ys) - 1)
+    tx = (x - xs[i]) / (xs[i + 1] - xs[i])
+    ty = (y - ys[j]) / (ys[j + 1] - ys[j])
+    return (1 - tx) * (1 - ty) * A[i, j] + tx * (1 - ty) * A[i + 1, j] +
+           (1 - tx) * ty * A[i, j + 1] + tx * ty * A[i + 1, j + 1]
+end
+
+"""
+    write_surface_track!(io, t, dt, chain, stokes, phase_ratios, grid, air_phase; xlim)
+
+Append one row per marker-chain vertex with `xlim[1] ≤ x ≤ xlim[2]`: the surface height
+`h(t)` with the strain rate, velocity and `dt` that move it during this step. Fields are
+interpolated half a cell below the surface (strain rates from cell centres, velocities from
+the staggered Vx/Vy grids), so they are rock values rather than a mix with the air across the
+interface. Columns 1-8 follow the SZU2019 marker track; vx, vy are appended.
+"""
+function write_surface_track!(io, t, dt, chain, stokes, phase_ratios, grid, air_phase; xlim = (600.0e3, 1500.0e3))
+    xv, yv = Array(grid.xvi[1]), Array(grid.xvi[2])
+    nx, ny = length(xv) - 1, length(yv) - 1
+    h = Array(chain.h_vertices)
+    Vx, Vy = Array(stokes.V.Vx), Array(stokes.V.Vy)
+    (xVx, yVx), (xVy, yVy) = map(g -> Array.(g), grid.xi_vel)
+    @assert size(Vx) == (length(xVx), length(yVx)) && size(Vy) == (length(xVy), length(yVy))
+    xc, yc = Array(grid.xci[1]), Array(grid.xci[2])
+    exx, exy = Array(stokes.ε.xx), Array(stokes.ε.xy_c) # both at cell centres
+    @assert size(exx) == size(exy) == (length(xc), length(yc))
+    pc = Array(phase_ratios.center.data) # (cells, nphases, 1), cells in column-major (i, j) order
+
+    for i in eachindex(xv)
+        x = xv[i]
+        xlim[1] ≤ x ≤ xlim[2] || continue
+        # rock-side sample point: half the local cell height below the surface
+        jh = clamp(searchsortedlast(yv, h[i]), 1, ny)
+        y = h[i] - 0.5 * (yv[jh + 1] - yv[jh])
+        vx = bilinear_rect(Vx, xVx, yVx, x, y)
+        vy = bilinear_rect(Vy, xVy, yVy, x, y)
+        εxx = bilinear_rect(exx, xc, yc, x, y)
+        εxy = bilinear_rect(exy, xc, yc, x, y)
+        # dominant non-air phase of the cell containing the sample point
+        c = clamp(searchsortedlast(xv, x), 1, nx) + (clamp(searchsortedlast(yv, y), 1, ny) - 1) * nx
+        phase, best = air_phase, 0.0
+        for p in axes(pc, 2)
+            p == air_phase && continue
+            pc[c, p, 1] > best && ((phase, best) = (p, pc[c, p, 1]))
+        end
+        println(io, t, ' ', x, ' ', -h[i], ' ', εxx, ' ', εxy, ' ', phase, ' ', dt, ' ', i, ' ', vx, ' ', vy)
+    end
+    return nothing
+end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -370,7 +440,7 @@ function main(
 
     # Rheology
     args0 = (T = thermal.T, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (1.0e18, 1.0e24)
+    viscosity_cutoff = (1.0e18, 1.0e25)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     # ----------------------------------------------------
@@ -401,6 +471,9 @@ function main(
     t, it = 0.0, 0
 
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
+
+    # per-step surface output in the SZU2019 marker-track layout
+    surface_io = open_surface_track(joinpath(vis.vtk_dir, "surface_track.txt"))
 
     while t < 4.4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
         if it == 4
@@ -472,6 +545,10 @@ function main(
         dt = compute_dt(stokes, di_min, dt_max)
         println("dt kyr= ", dt/365.25/24/3600/1000, "  finite = ", isfinite(dt), "  positive = ", dt > 0)
 
+        # surface h(t) with the strain rate, velocity and dt that move it this step (chain is advected below)
+        write_surface_track!(surface_io, t, dt, chain, stokes, phase_ratios, grid, air_phase)
+        rem(it, 25) == 0 && flush(surface_io)
+
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
@@ -531,12 +608,11 @@ function main(
         # # advect marker chain
         # semi-Lagrangian update with slope limiter: stops the chain forming a near-vertical
         # cliff at the plate boundary (x ≈ 854 km); mean height free to change
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, xvi, dt;
-            max_slope_angle = 30.0, conserve_mean = false)
-        # advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, dt)
+        # semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, xvi, dt;
+        #     max_slope_angle = 30.0, conserve_mean = false)
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
-        update_phase_ratios!(phase_ratios, particles, pPhases)
-        # update_phase_ratios!(phase_ratios, particles, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases) # always needed after advection/injection
         update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
         compute_rock_fraction!(ϕ, chain, xvi, grid.di.vertex)        # if it == 1
@@ -716,6 +792,7 @@ function main(
         end
     end
         # ------------------------------
+    close(surface_io)
     return nothing
 end
 
@@ -725,7 +802,8 @@ version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
 println("version is $version")
 
 # MODEL SETUP
-nx, ny = 1049, 269
+nx, ny = 1049, 305
+# nx, ny = 1049, 269
 # nx, ny = 3000, 520
 # nx, ny = 300, 52
 
