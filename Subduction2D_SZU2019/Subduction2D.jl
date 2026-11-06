@@ -14,11 +14,9 @@ end
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-    const backend_JR = CUDABackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-    const backend_JR = CPUBackend
 end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -37,44 +35,6 @@ else
 end
 # GPU-safe copy for CellArrays (works around JustPIC 0.7.14 resample! scalar indexing)
 Base.copy(x::JustPIC.CellArrays.CellArray) = typeof(x)(copy(x.data), size(x))
-
-# Workaround JustPIC 0.7.14 / GridGeometryUtils 0.3.1: recentering loses ~1e-10 m on
-# refined grids, so chain endpoints miss the cell edges. Every caller passes a chord
-# spanning the full cell width, so snap its x-ends onto the side edges exactly.
-const GGU = JustPIC.GridGeometryUtils
-@inline function JustPIC.recenter_on_cell(s::GGU.Segment, r::GGU.Rectangle{T}) where {T}
-    oy = r.center[2]
-    hl = r.l / 2
-    s_local = GGU.Segment(GGU.Point(-hl, s.p1[2] - oy), GGU.Point(hl, s.p2[2] - oy))
-    return s_local, GGU.Rectangle((zero(T), zero(T)), r.l, r.h; θ = zero(T))
-end
-# JustRelax's markerchain phase correction (update_phases_given_markerchain!) assumes a
-# uniform grid twice: it picks rows with a uniform dy (misses the surface) and finds the
-# chain column with a uniform-dx `cell_index` (compares particles against the wrong part
-# of the chain, empties cells -> NaN). Patch both. The GPU path runs its own copy of these
-# functions inside the CUDA extension module, so patch that module as well.
-const JR2D_modules = @static if isCUDA
-    (JustRelax.JustRelax2D, Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax2D)
-else
-    (JustRelax.JustRelax2D,)
-end
-for M in JR2D_modules
-    @eval begin
-        # search all rows (clamped inside the kernel)
-        $M.find_minmax_cell_indices(chain_yi, origin_y, di) = (11, 10^9)
-        # same function, but with JustPIC's refined-grid (bisection) column lookup
-        @inline function $M.is_above_chain(xq, yq, coords, cell_vertices)
-            I = JustPIC.parent_cell_index(xq, cell_vertices, JustPIC.midpoint_seed(cell_vertices))
-            x_cell, y_cell = coords[1][I], coords[2][I]
-            ychain = if 1 < I[1] < length(cell_vertices) - 1
-                JustPIC.interp1D_inner(xq, x_cell, y_cell, coords, I)
-            else
-                JustPIC.interp1D_extremas(xq, x_cell, y_cell)
-            end
-            return yq > ychain
-        end
-    end
-end
 
 # Load script dependencies
 using GeoParams, CairoMakie, LinearAlgebra, HDF5, PoissonGrids
@@ -139,7 +99,7 @@ function main(
     di_min = @. li / ni       # grid steps
     # non-uniform grid with refinement
     grid = Geometry(
-        PTArray(backend_JR),
+        PTArray(backend),
         vertices...
         )
     di_min = min(
@@ -268,18 +228,16 @@ function main(
 
     # visualization prep moved to LocalModules/visualisation.jl
     centroid2particle!(pT, thermal.T, particles)
-    # dt₀ = similar(thermal.T)
-    # AI assisted implement. verify.
-    dt₀_center = similar(stokes.P)   # plain (nx, ny), matches what subgrid_characteristic_time! expects
-    dt₀         = similar(thermal.T) # ghost-padded (nx+2, ny+2), for centroid2particle! below
+
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
+
+    dt₀ = similar(thermal.T)
 
     # Time loop
     t, it = 0.0, 0
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
-
-    # per-step surface output in the SZU2019 marker-track layout
-    surface_io = open_surface_track(joinpath(vis.vtk_dir, "surface_track.txt"))
+    # # per-step surface output in the SZU2019 marker-track layout
+    # surface_io = open_surface_track(joinpath(vis.vtk_dir, "surface_track.txt"))
 
     while t < 4.4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
         if it == 4
@@ -352,8 +310,8 @@ function main(
         println("dt kyr= ", dt/365.25/24/3600/1000, "  finite = ", isfinite(dt), "  positive = ", dt > 0)
 
         # surface h(t) with the strain rate, velocity and dt that move it this step (chain is advected below)
-        write_surface_track!(surface_io, t, dt, chain, stokes, phase_ratios, grid, air_phase)
-        rem(it, 25) == 0 && flush(surface_io)
+        # write_surface_track!(surface_io, t, dt, chain, stokes, phase_ratios, grid, air_phase)
+        # rem(it, 25) == 0 && flush(surface_io)
 
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
@@ -382,15 +340,14 @@ function main(
 
 
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀_center, phase_ratios, rheology, thermal, stokes
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        @views dt₀[2:end-1, 2:end-1] .= dt₀_center   # copy into the padded array at the correct offset
-        @views dt₀[1, :]   .= dt₀[2, :]
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
         @views dt₀[end, :] .= dt₀[end - 1, :]
-        @views dt₀[:, 1]   .= dt₀[:, 2]
+        @views dt₀[:, 1] .= dt₀[:, 2]
         @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-
         subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
@@ -598,20 +555,17 @@ function main(
         end
     end
         # ------------------------------
-    close(surface_io)
+    # close(surface_io)
     return nothing
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
-# version = "v0.389_justpic0.7.14_interactive"
+# version = "v0.394_QS0.8.1_interactive3"
 println("version is $version")
 
 # MODEL SETUP
 nx, ny = 1049, 305
-# nx, ny = 1049, 269
-# nx, ny = 3000, 520
-# nx, ny = 300, 52
 
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
 ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
