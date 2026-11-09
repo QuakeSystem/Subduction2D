@@ -45,6 +45,10 @@ WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [sources]
 JustRelax = {path = "../JustRelax.jl"}
+# For the exact tagged version: comment out the line above, uncomment the line below,
+# then run: julia --project=. -e 'using Pkg; Pkg.resolve()'
+# JustRelax = {url = "https://github.com/QuakeSystem/JustRelax.jl", rev = "v0.8.1-QS"}
+
 
 [extras]
 CUDA_Runtime_jll = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"
