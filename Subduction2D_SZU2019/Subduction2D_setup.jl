@@ -24,7 +24,18 @@ function GMG_subduction_2D_with_coords(
     )
     model_depth = 400.0 # km
     Tsurface = 20
-    Tbot = 1796 - 273.15 # C, from Katsura 2022 400km deep
+    # Sub-lithospheric mantle follows the model's own adiabat, dT/dz = α g T / Cp
+    # (α, Cp as in Subduction2D_rheology.jl), anchored at Tlab at the LAB.
+    # This gives ~0.38-0.42 K/km, the same as the Katsura (2022) gradient. Katsura's
+    # 1972 K at 600 km is NOT used because it includes the latent-heat jumps at 410 km
+    # (+61 K) and 520 km (+43 K); the model has no olivine phase transitions, so those
+    # jumps would only add super-adiabatic buoyancy.
+    z_lab = -112.5          # km
+    α_mantle = 2.4e-5      # 1/K
+    Cp_mantle = 1.0e3      # J/kg/K
+    g = 9.81               # m/s²
+    dTdz_adiabat = 0.4     # °C/km, linear adiabat below the LAB
+    T_adiabat(z_km, Tlab_C) = Tlab_C + dTdz_adiabat * (z_lab - z_km)  # °C; z_km ≤ z_lab (negative, km)
     x0_km, x1_km = 0.0, 1500.0
     air_thickness = 0.0
     z0_km, z1_km = -model_depth * 1.0, air_thickness
@@ -54,8 +65,8 @@ function GMG_subduction_2D_with_coords(
 
     # Phases and temperature on the CartData grid points ------------------
     Phases = zeros(Int64, nx_vertices, 1, ny_vertices)
-    Temp = fill(Tbot, nx_vertices, 1, ny_vertices)
     Tlab = 1300
+    Temp = fill(Float64(Tlab), nx_vertices, 1, ny_vertices)
 
 
     # phases
@@ -70,7 +81,14 @@ function GMG_subduction_2D_with_coords(
     # 4: deflected oceanic crust
     # 5: deflected gabbro
 
-
+    # Mantle temperature below the LAB: adiabat from Tlab (see T_adiabat above).
+    # 1300 °C at 112.5 km -> 1415 °C at 400 km (1495 °C at 600 km).
+    zkm = Grid2D.z.val
+    for I in eachindex(Temp)
+        if zkm[I] ≤ z_lab
+            Temp[I] = T_adiabat(zkm[I], Tlab)
+        end
+    end
     #### Temperature fields. Four total
     # Subducting plate temperature, halfspace cooling (80 Myr age)
     add_polygon!(
@@ -78,7 +96,7 @@ function GMG_subduction_2D_with_coords(
         Temp,
         Grid2D;
         xlim = (854, 940, 1035, 1100, x0_km, x0_km),
-        zlim = (-12.5, -35, -80, -112.5, -112.5, -12.5),
+        zlim = (-12.5, -35, -80, z_lab, z_lab, -12.5),
         T = HalfspaceCoolingTemp(Tsurface = Tsurface, Tmantle = Tlab, Age = 40, Adiabat = 0.5)
     )
 
@@ -89,7 +107,7 @@ function GMG_subduction_2D_with_coords(
         Temp,
         Grid2D;
         xlim = (954, 854, 940, 1035, 1100, x1_km, x1_km),
-        zlim = (-8, -12.5, -35, -80, -112.5, -112.5, -8),
+        zlim = (-8, -12.5, -35, -80, z_lab, z_lab, -8),
         T = LinearTemp(Ttop = Tsurface, Tbot = Tlab)
     )
 
@@ -113,15 +131,7 @@ function GMG_subduction_2D_with_coords(
         T = ConstantTemp(T=Tlab)
     )
 
-    # Mantle temperature, linear geotherm with TLab = 1300 and T = Tbot 1445 C, from Katsura 2022.
-    add_box!(
-        Phases,
-        Temp,
-        Grid2D;
-        xlim = (x0_km, x1_km),
-        zlim = (-model_depth, -112.5),
-        T = LinearTemp(Ttop = Tlab, Tbot = Tbot)
-    )
+
 
     #### Material phases described with polygons similar to SZU2019.
     #  asthenosphere - mantle
@@ -149,7 +159,7 @@ function GMG_subduction_2D_with_coords(
         Temp,
         Grid2D;
         xlim = (x0_km, x0_km, x1_km, x1_km),
-        zlim = (-19.5, -112.5, -112.5, -19.5),
+        zlim = (-19.5, z_lab, z_lab, -19.5),
         phase = ConstantPhase(1)
     )
 

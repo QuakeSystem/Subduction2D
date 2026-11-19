@@ -12,7 +12,7 @@ if [ -z "$VERSION" ]; then
 fi
 
 TEMPLATE_DIR="Subduction2D_SZU2019"
-OUTDIR="Subduction2D_SZU2019/data/Subduction2D_pre_JRv0.8.1/$VERSION"
+OUTDIR="Subduction2D_SZU2019/data/Subduction2D_JRv0.8.1_QS/$VERSION"
 
 # Create run directory
 mkdir -p "$OUTDIR"
@@ -27,6 +27,15 @@ sed \
   -e "s/--job-name .*/--job-name $VERSION/" \
   -e "s|julia --project \./Subduction2D_SZU2019/Subduction2D.jl|julia --project ./$OUTDIR/Subduction2D.jl|" \
   run_eejit_sub2d.sbatch > "$OUTDIR/run_eejit_sub2d.sbatch"
+
+cp Project.toml Manifest.toml "$OUTDIR/"
+cp -r LocalModules "$OUTDIR/"
+{
+  echo "date: $(date -Iseconds)"
+  echo "Subduction2D commit: $(git rev-parse HEAD)"; git status --porcelain
+  echo "JustRelax commit: $(git -C ../JustRelax.jl rev-parse HEAD)"; git -C ../JustRelax.jl status --porcelain
+  echo "julia: $(julia --version)"
+} > "$OUTDIR/provenance.txt"
 
 echo "Output directory created: $OUTDIR"
 echo "Input files are stored as:"

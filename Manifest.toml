@@ -1337,7 +1337,9 @@ version = "0.7.16"
 
 [[deps.JustRelax]]
 deps = ["Adapt", "CellArrays", "CellArraysIndexing", "Crayons", "ExactFieldSolutions", "ForwardDiff", "GeoParams", "HDF5", "ImplicitGlobalGrid", "JLD2", "JustPIC", "LinearAlgebra", "MPI", "MathTeXEngine", "MuladdMacro", "ParallelStencil", "Printf", "Reexport", "StaticArrays", "Statistics", "TOML", "WriteVTK"]
-path = "../JustRelax.jl"
+git-tree-sha1 = "2e8eb486be2722046848f0a7fe26cff4f919f91e"
+repo-rev = "v0.8.1-QS"
+repo-url = "https://github.com/QuakeSystem/JustRelax.jl"
 uuid = "34418575-392d-4e26-8c6d-96b0910afa06"
 version = "0.8.1"
 

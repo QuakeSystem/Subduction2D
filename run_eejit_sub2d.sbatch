@@ -10,6 +10,7 @@
 #SBATCH -e job.%N.%j.%x.err  # STDERR
 #SBATCH --job-name template
 #SBATCH -t 30-00:00:00
+#SBATCH --mem-per-gpu=20G
 
 
 # Eejit:

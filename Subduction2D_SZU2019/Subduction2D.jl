@@ -243,20 +243,7 @@ function main(
         if it == 4
             rheology = init_rheologies()
         end
-        # Get flat views of the raw data
-        phases_flat = pPhases.data[:]   # all particle phase values
-        temps_flat  = pT.data[:]        # all particle temperatures
-        index_flat  = particles.index.data[:]  # true = active particle
-        air_mask = (phases_flat .== 2.0) .& index_flat
-        pT.data[air_mask] .= 273.0
-        pT_active = Array(pT.data)[Array(particles.index.data)]
 
-        particle2centroid!(thermal.T, pT, particles)
-        thermal_bcs!(thermal, thermal_bc)
-        thermal.T .= clamp.(thermal.T, Ttop - 50.0, Tbot + 50.0)
-
-        # interpolate stress back to the grid
-        stress2grid!(stokes, pτ, particles)
 
         # Rebuild flow_bcs' internal velocity-box dirichlet region so it picks up any
         # change to vel_boxes_2D (e.g. the ramped-up prescribed velocity at it==5,10,15);
@@ -287,9 +274,9 @@ function main(
                     verbose_DR = false,
                     iterMax = 50.0e2,
                     rel_drop = 1.0e-2,
-                    nout = 400,
-                    λ_relaxation_PH = 1,
-                    λ_relaxation_DR = 1,
+                    nout = 100,
+                    λ_relaxation_PH = 0.5,
+                    λ_relaxation_DR = 0.5,
                     viscosity_relaxation = 1.0e-2,
                     viscosity_cutoff = viscosity_cutoff,
                     free_surface = true,
@@ -331,6 +318,7 @@ function main(
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,
+                # stokes = stokes, # enables adiabatic heating: α T (P - P0) / dt
                 iterMax = 50.0e5,
                 nout = 1.0e2,
                 verbose = false,
@@ -361,12 +349,12 @@ function main(
         move_particles!(particles, particle_args)
         # Inject phase labels first, then initialize every newly injected particle field
         # through the regular centroid/vertex interpolation paths.
-        inject_particles_phase!(particles, pPhases, (pT, ), (thermal.T,))
-
-        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles; ghosted = false)
-        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles; ghosted = false)
-        grid2particle!(pτ.τ_shear[1], stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
-        grid2particle!(pτ.ω[1], stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            (pT, pτ.τ_normal[1], pτ.τ_normal[2], pτ.τ_shear[1], pτ.ω[1]),
+            (thermal.T, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.ω.xy),
+        )
 
         # # advect marker chain
         # semi-Lagrangian update with slope limiter: stops the chain forming a near-vertical
@@ -384,8 +372,21 @@ function main(
         #     @show Array(chain.h_vertices)
         # end
 
+        # Get flat views of the raw data
+        phases_flat = pPhases.data[:]   # all particle phase values
+        temps_flat  = pT.data[:]        # all particle temperatures
+        index_flat  = particles.index.data[:]  # true = active particle
+        air_mask = (phases_flat .== 2.0) .& index_flat
+        pT.data[air_mask] .= 273.0
+
+        particle2centroid!(thermal.T, pT, particles)
+        thermal_bcs!(thermal, thermal_bc)
+        thermal.T .= clamp.(thermal.T, Ttop - 50.0, Tbot + 50.0)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
         # update phase ratios
-        particle_report(pT, particles, thermal, xvi; label = "end_of_time_step")
+        # particle_report(pT, particles, thermal, xvi; label = "end_of_time_step")
         let h = Array(chain.h_vertices), x = Array(chain.cell_vertices)
             s = atand.(abs.(diff(h) ./ diff(x)))
             println("chain max slope = ", maximum(s), "° at x = ", x[argmax(s)] / 1e3, " km")
@@ -423,8 +424,12 @@ function main(
         if vis.do_vtk && (it == 1 || rem(it, vis.vtk_every) == 0)
             velocity2vertex!(vis.Vx_v, vis.Vy_v, @velocity(stokes)...)
             # Reconstruct compact phase "shapes" on the grid from particle phase ratios.
-            pv = Array(phase_ratios.vertex.data)        # (cells, nphases, 1)
-            phase_vertex = reshape([argmax(@view pv[c, :, 1]) for c in axes(pv, 1)], size(phase_ratios.vertex))
+            # CellArray data is (blocklen, nphases, nblocks): (ncells, nphases, 1) on GPU,
+            # (1, nphases, ncells) on CPU. Fold to (ncells, nphases) for either layout.
+            pv_raw = Array(phase_ratios.vertex.data)
+            pv = reshape(permutedims(pv_raw, (1, 3, 2)), :, size(pv_raw, 2))
+            phase_vertex = reshape([argmax(@view pv[c, :]) for c in axes(pv, 1)], size(phase_ratios.vertex))
+            Rx_c = zeros(size(stokes.P))
             Rx_c = zeros(size(stokes.P))
             Ry_c = zeros(size(stokes.P))
             @views Rx_c[axes(stokes.R.Rx, 1), axes(stokes.R.Rx, 2)] .= Array(stokes.R.Rx)
@@ -561,11 +566,12 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 version = get(ENV, "SLURM_JOB_NAME", "unknown_version")
-# version = "v0.394_QS0.8.1_interactive3"
+# version = "v0.397_diffcreep600km"
 println("version is $version")
 
 # MODEL SETUP
 nx, ny = 1049, 305
+# nx, ny = 1049, 356  # 600 km depth
 
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
 ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
