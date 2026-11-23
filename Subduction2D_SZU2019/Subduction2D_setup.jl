@@ -22,7 +22,7 @@ function GMG_subduction_2D_with_coords(
         z_zone::NTuple{2, Float64} = (-80.0, 0.0),     # refined z range [km] -- top of the domain
         verbose::Int = 1,
     )
-    model_depth = 400.0 # km
+    model_depth = 600.0 # km
     Tsurface = 20
     # Sub-lithospheric mantle follows the model's own adiabat, dT/dz = α g T / Cp
     # (α, Cp as in Subduction2D_rheology.jl), anchored at Tlab at the LAB.

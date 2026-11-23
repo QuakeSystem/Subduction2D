@@ -1,6 +1,6 @@
 #!/bin/sh
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=2
 #SBATCH --gpus-per-task=1
 #SBATCH --threads-per-core=1
 #SBATCH --gres=gpu
@@ -64,7 +64,9 @@ echo "  submitting the first job: `date` "
 # rm -rf /scratch/tectonics/bert/julia_local/julia_depot/compiled/v1.*/JustRelax*
 export UCX_ERROR_SIGNALS=""
 
-julia --project ./Subduction2D_SZU2019/Subduction2D.jl
+# Spawns two processes
+julia -t 2 --project ./Subduction2D_SZU2019/Subduction2D.jl
 # julia --project=. ./old_versions/justrelax/v0.8.0/original/Subduction2D_DYREL.jl
 # julia --project=. ./old_versions/justrelax/v0.6.1/base_v0.370_newvelbox/Subduction2D.jl
+# julia --project=../JustRelax.jl/miniapps/. ../JustRelax.jl/miniapps/DYREL3D/subduction/Subduction3D_DYREL.jl
 echo "  first job finished: `date` "

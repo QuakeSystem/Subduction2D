@@ -238,7 +238,8 @@ function main(
 
     # # per-step surface output in the SZU2019 marker-track layout
     # surface_io = open_surface_track(joinpath(vis.vtk_dir, "surface_track.txt"))
-
+    # For asynchronous figure making
+    fig_task = nothing
     while t < 4.4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
         if it == 4
             rheology = init_rheologies()
@@ -533,34 +534,36 @@ function main(
             xmax_full = maximum(xvi[1]) * 1.0e-3
             ymin_full = minimum(xvi[2]) * 1.0e-3
             ymax_full = maximum(xvi[2]) * 1.0e-3
-
-            # FULL DOMAIN FIGURE
-            make_figure(
-                it, t, dt_plot,
-                xvi, xci,
-                thermal.T[2:end-1,2:end-1], ρg,
-                stokes,
-                Vx_limited, Vy_limited,
-                pxv, pyv, clr, idxv,
-                xmin_full, xmax_full, ymin_full, ymax_full,
-                joinpath(vis.figdir, "full", "full_$(lpad(it, 2, "0")).png"), version=version
+            # host-side snapshot: everything make_figure reads, detached from the solver state
+            T_h      = Array(thermal.T[2:end-1, 2:end-1])
+            ρg_h     = (nothing, Array(ρg[2]))                       # make_figure only uses ρg[2]
+            xvi_h    = (Array(xvi[1]), Array(xvi[2]))
+            xci_h    = (Array(xci[1]), Array(xci[2]))
+            stokes_h = (;
+                τ         = (; II = Array(stokes.τ.II)),
+                ε         = (; II = Array(stokes.ε.II)),
+                viscosity = (; η = Array(stokes.viscosity.η), η_vep = Array(stokes.viscosity.η_vep)),
             )
+            it_h, t_h, dt_h = it, t, dt_plot
 
-            # ZOOMED FIGURE
-            make_figure(
-                it, t, dt_plot,
-                xvi, xci,
-                thermal.T[2:end-1,2:end-1], ρg,
-                stokes,
-                Vx_limited, Vy_limited,
-                pxv, pyv, clr, idxv,
-                xmin_zoom, xmax_zoom, ymin_zoom, ymax_zoom,
-                joinpath(vis.figdir, "zoom", "zoom_$(lpad(it, 2, "0")).png"), version=version
-            )
+            fig_task === nothing || wait(fig_task)        # at most one plot job in flight
+            
+            fig_task = errormonitor(Threads.@spawn begin
+                make_figure(it_h, t_h, dt_h, xvi_h, xci_h, T_h, ρg_h, stokes_h,
+                    Vx_limited, Vy_limited, pxv, pyv, clr, idxv,
+                    xmin_full, xmax_full, ymin_full, ymax_full,
+                    joinpath(vis.figdir, "full", "full_$(lpad(it_h, 2, "0")).png"), version = version)
+                make_figure(it_h, t_h, dt_h, xvi_h, xci_h, T_h, ρg_h, stokes_h,
+                    Vx_limited, Vy_limited, pxv, pyv, clr, idxv,
+                    xmin_zoom, xmax_zoom, ymin_zoom, ymax_zoom,
+                    joinpath(vis.figdir, "zoom", "zoom_$(lpad(it_h, 2, "0")).png"), version = version)
+            end)
+
         end
     end
         # ------------------------------
     # close(surface_io)
+    fig_task === nothing || wait(fig_task)        # don't exit with a figure half-written
     return nothing
 end
 

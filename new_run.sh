@@ -25,7 +25,7 @@ cp "$TEMPLATE_DIR/Subduction2D_rheology.jl"             "$OUTDIR/"
 # Copy slurm script and inject version name
 sed \
   -e "s/--job-name .*/--job-name $VERSION/" \
-  -e "s|julia --project \./Subduction2D_SZU2019/Subduction2D.jl|julia --project ./$OUTDIR/Subduction2D.jl|" \
+  -e "s|\./Subduction2D_SZU2019/Subduction2D.jl|./$OUTDIR/Subduction2D.jl|" \
   run_eejit_sub2d.sbatch > "$OUTDIR/run_eejit_sub2d.sbatch"
 
 cp Project.toml Manifest.toml "$OUTDIR/"
