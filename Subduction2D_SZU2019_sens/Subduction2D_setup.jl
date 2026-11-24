@@ -1,0 +1,297 @@
+using GeophysicalModelGenerator
+
+"""
+Like `GMG_subduction_2D`, but also returns the non-uniform 1D coordinate vectors
+needed by the DYREL grid setup:
+`xvi` (staggered/vertex coordinates) and `xci` (cell-center coordinates) in meters.
+
+The non-uniform axis refinement itself lives in NonuniformGrid.jl
+(`poisson_coords_1d`, built on PoissonGrids.jl's `solve_grid`) -- this function
+just supplies the subduction-specific monitors, defaults, and geometry (phases,
+temperature fields).
+"""
+function GMG_subduction_2D_with_coords(
+        nx_vertices::Int,
+        ny_vertices::Int;
+        ref_grid::Int = 0,
+        h_fine::Float64 = 0.5,                        # km, target resolution inside the refined zones
+        h_coarse::Float64 = 4.0,                      # km, background resolution away from the zones
+        κ_x::Float64 = 0.05,                           # x transition sharpness [1/km]; larger = shorter transition, more stretching
+        κ_z::Float64 = 0.05,                           # z transition sharpness [1/km]
+        x_zone::NTuple{2, Float64} = (800.0, 1100.0),  # refined x range [km] -- must bracket the trench/slab geometry
+        z_zone::NTuple{2, Float64} = (-80.0, 0.0),     # refined z range [km] -- top of the domain
+        verbose::Int = 1,
+    )
+    model_depth = 400.0 # km
+    Tsurface = 20
+    # Sub-lithospheric mantle follows the model's own adiabat, dT/dz = α g T / Cp
+    # (α, Cp as in Subduction2D_rheology.jl), anchored at Tlab at the LAB.
+    # This gives ~0.38-0.42 K/km, the same as the Katsura (2022) gradient. Katsura's
+    # 1972 K at 600 km is NOT used because it includes the latent-heat jumps at 410 km
+    # (+61 K) and 520 km (+43 K); the model has no olivine phase transitions, so those
+    # jumps would only add super-adiabatic buoyancy.
+    z_lab = -112.5          # km
+    α_mantle = 2.4e-5      # 1/K
+    Cp_mantle = 1.0e3      # J/kg/K
+    g = 9.81               # m/s²
+    dTdz_adiabat = 0.4     # °C/km, linear adiabat below the LAB
+    T_adiabat(z_km, Tlab_C) = Tlab_C + dTdz_adiabat * (z_lab - z_km)  # °C; z_km ≤ z_lab (negative, km)
+    x0_km, x1_km = 0.0, 1500.0
+    air_thickness = 0.0
+    z0_km, z1_km = -model_depth * 1.0, air_thickness
+
+    # Monitor contrast: cell width ~ 1/M, so M = 1 + α inside the refined zone and
+    # M = 1 outside it gives a fine/coarse width ratio of h_coarse/h_fine.
+    α = h_coarse / h_fine - 1.0
+
+    # Our coordinate arrays are "points" for CartData: xvi has length nx_vertices.
+    # Each tanh edge is pushed outward by 1.5/κ so the zone sits on the monitor's
+    # plateau (M ≥ ~0.95 * max) rather than on its transition slope.
+    δx = 1.5 / κ_x
+    Mx = window_monitor(α, κ_x, (x_zone[2] - x_zone[1]) / 2 + δx, sum(x_zone) / 2)
+    x = poisson_coords_1d(
+        nx_vertices, x0_km, x1_km;
+        ref_grid = ref_grid, monitor = Mx, verbose = verbose, label = "x",
+    )
+
+    δz = 1.5 / κ_z
+    Mz = tanh_monitor(α, κ_z, z_zone[1] - δz)  # 1 → 1+α for z > z_zone[1], so the surface stays fine
+    z = poisson_coords_1d(
+        ny_vertices, z0_km, z1_km;
+        ref_grid = ref_grid, monitor = Mz, verbose = verbose, label = "z",
+    )
+
+    Grid2D = CartData(xyz_grid(x, 0, z))
+
+    # Phases and temperature on the CartData grid points ------------------
+    Phases = zeros(Int64, nx_vertices, 1, ny_vertices)
+    Tlab = 1300
+    Temp = fill(Float64(Tlab), nx_vertices, 1, ny_vertices)
+
+
+    # phases
+    # These were all unique up to v0.75 (28 jan 2026). Now made contiguous for simplicity (and prevent ABI overload).
+    # 1: asthenosphere - mantle
+    # 2: air
+    # 3: mantle weakzone
+    # 4: oceanic crust
+    # 5: oceanic gabbro
+    # 6: felsic crust
+    # 7: sediments
+    # 4: deflected oceanic crust
+    # 5: deflected gabbro
+
+    # Mantle temperature below the LAB: adiabat from Tlab (see T_adiabat above).
+    # 1300 °C at 112.5 km -> 1415 °C at 400 km (1495 °C at 600 km).
+    zkm = Grid2D.z.val
+    for I in eachindex(Temp)
+        if zkm[I] ≤ z_lab
+            Temp[I] = T_adiabat(zkm[I], Tlab)
+        end
+    end
+    #### Temperature fields. Four total
+    # Subducting plate temperature, halfspace cooling (80 Myr age)
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (854, 940, 1035, 1100, x0_km, x0_km),
+        zlim = (-12.5, -35, -80, z_lab, z_lab, -12.5),
+        T = HalfspaceCoolingTemp(Tsurface = Tsurface, Tmantle = Tlab, Age = 40, Adiabat = 0.5)
+    )
+
+    # Overriding plate temperature, linear geotherm with T0=0 and Tbot=TLab=1300C
+    # NOTE: slight error for the left top edge (-12.5km to -8 km gradient), as temperature here is 0-39C at the surface (gradient is vertical with -8 as surface, leaving left side exposed
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (954, 854, 940, 1035, 1100, x1_km, x1_km),
+        zlim = (-8, -12.5, -35, -80, z_lab, z_lab, -8),
+        T = LinearTemp(Ttop = Tsurface, Tbot = Tlab)
+    )
+
+    # Air temperature, constant zero C.
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (x0_km, x0_km, 854, 954, x1_km, x1_km),
+        zlim = (z1_km, -12.5, -12.5, -8, -8, z1_km),
+        T = ConstantTemp(T = 0)
+    )
+
+    # Left side rift to detach plate
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (x0_km, x0_km, x0_km + 20, x0_km + 80),
+        zlim = (-100, -12.5, -12.5, -100),
+        T = ConstantTemp(T=Tlab)
+    )
+
+
+
+    #### Material phases described with polygons similar to SZU2019.
+    #  asthenosphere - mantle
+    add_box!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (x0_km, x1_km),
+        zlim = (-model_depth, 0),
+        phase = ConstantPhase(1),
+    )
+    # air
+    add_box!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (x0_km, x1_km),
+        zlim = (-12.5, z1_km),
+        phase = ConstantPhase(2),
+    )
+
+    # asthenosphere
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (x0_km, x0_km, x1_km, x1_km),
+        zlim = (-19.5, z_lab, z_lab, -19.5),
+        phase = ConstantPhase(1)
+    )
+
+
+    # mantle weakzone
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (920, 1035, 1050, 970),
+        zlim = (-25, -80, -80, -38),
+        phase = ConstantPhase(3)
+    )
+
+    # oceanic crust/interface material
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (x0_km, x0_km, 906, 902),
+        zlim = (-12.5, -14.5, -14.5, -12.5),
+        phase = ConstantPhase(4)
+    )
+
+    # oceanic gabbro
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (x0_km, x0_km, 916, 906),
+        zlim = (-14.5, -19.5, -19.5, -14.5),
+        phase = ConstantPhase(5)
+    )
+
+    # felsic crust 1
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (954, 854, x1_km, x1_km),
+        zlim = (-8, -19.5, -11.5, -8),
+        phase = ConstantPhase(6)
+    )
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (854, 890, x1_km, x1_km),
+        zlim = (-19.5, -23, -23, -11.5),
+        phase = ConstantPhase(6)
+    )
+
+    # felsic crust 2
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (890, 960, x1_km, x1_km),
+        zlim = (-23, -38, -38, -23),
+        phase = ConstantPhase(6)
+    )
+
+    # sediments
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (954, 854, 1007, 1030),
+        zlim = (-8, -12.5, -19.5, -8),
+        phase = ConstantPhase(7)
+    )
+
+    # sediments 2
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (854, 960, 970, 1007),
+        zlim = (-12.5, -38, -38, -19.5),
+        phase = ConstantPhase(7)
+    )
+
+
+    #   /Deflected_Hydrated_fractured_top_oceanic_crust_Thrust_Interface
+    # Same rheology as Oceanic Crust (4)
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (854, 854, 967, 980),
+        zlim = (-12.5, -18.5, -39.3, -33),
+        phase = ConstantPhase(4)
+    )
+
+    #    /Deflected_Crust_(Gabbro)
+    # Same rheology as Oceanic crust (Gabbro) (5)
+    add_polygon!(
+        Phases,
+        Temp,
+        Grid2D;
+        xlim = (854, 854, 925, 900),
+        zlim = (-14.5, -19.5, -32, -21),
+        phase = ConstantPhase(5)
+    )
+
+    add_vel_box!(
+        cenx = 360 * 1.0e3,  # m
+        cenz = -54.8 * 1.0e3,          # m
+        widthx = 20 * 1.0e3,          # m
+        widthz = 23.6 * 1.0e3,           # m
+        vx = 7.5 * 0.01 / (3600 * 24 * 365)             # m/s (optional)
+        #    vy     = -4.0e-9,                    # m/s (optional)
+    )
+
+    Grid2D = addfield(Grid2D, (; Phases, Temp))
+    # write_paraview(Grid2D, "Initial_Setup_Subduction_rank")
+
+    # Convert coordinates/geometry to meters for DYREL
+    li = (abs(last(x) - first(x)), abs(last(z) - first(z))) .* 1.0e3
+    origin = (x[1], z[1]) .* 1.0e3
+
+    ph = Phases[:, 1, :]
+    T = Temp[:, 1, :] .+ 273
+
+    # Staggered grid coordinate vectors in meters:
+    # - xvi are vertices (length nx_vertices)
+    # - xci are cell centers (length nx_vertices-1)
+    xv, yv = (x .* 1.0e3, z .* 1.0e3)
+    # xci = (
+    #     0.5 .* (x[1:(end - 1)] .+ x[2:end]) .* 1.0e3,
+    #     0.5 .* (z[1:(end - 1)] .+ z[2:end]) .* 1.0e3,
+    # )
+
+    return li, origin, ph, T, (xv, yv)
+end

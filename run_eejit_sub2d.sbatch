@@ -1,4 +1,5 @@
 #!/bin/sh
+# TEMPLATE: do not sbatch this file directly. Use: bash new_run.sh [-a] [-v <name>]
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --gpus-per-task=1
@@ -8,7 +9,7 @@
 #SBATCH --nodes=1
 #SBATCH -o job.%N.%j.%x.out  # STDOUT
 #SBATCH -e job.%N.%j.%x.err  # STDERR
-#SBATCH --job-name template
+#SBATCH --job-name __JOB_NAME__
 #SBATCH -t 30-00:00:00
 #SBATCH --mem-per-gpu=20G
 
@@ -36,8 +37,8 @@ module purge
 module load development
 # Loads needed modules for cpu, but also loads a default julia binary
 module load dev2024
-# Edit below to fit your own path to your julia. See onboarding docs on how to install julia
-export PATH="/scratch/tectonics/bert/julia_local/JuliaUp/bin:$PATH"
+# Julia of whoever ran new_run.sh (filled in by new_run.sh). See onboarding docs on how to install julia
+export PATH="__JULIA_BIN_DIR__:$PATH"
 module load CUDA/12.5 # on gpu nodes
 
 export JULIA_SSL_NO_VERIFY_HOSTS="*"
@@ -61,11 +62,12 @@ echo "Current working directory is `pwd`"
 echo "  submitting the first job: `date` "
 
 # Enable below to enforce recompiling. Useful if you changed something in the JR fork and want to guarantee a reset
-# rm -rf /scratch/tectonics/bert/julia_local/julia_depot/compiled/v1.*/JustRelax*
+# rm -rf "${JULIA_DEPOT_PATH%%:*}"/compiled/v1.*/JustRelax*
 export UCX_ERROR_SIGNALS=""
 
-# Spawns two processes
-julia -t 2 --project ./Subduction2D_SZU2019/Subduction2D.jl
+# Spawns two processes. The run folder (holding the copied driver files and
+# Project/Manifest.toml) is filled in by new_run.sh
+julia -t 2 --project=./__RUN_DIR__ ./__RUN_DIR__/Subduction2D.jl
 # julia --project=. ./old_versions/justrelax/v0.8.0/original/Subduction2D_DYREL.jl
 # julia --project=. ./old_versions/justrelax/v0.6.1/base_v0.370_newvelbox/Subduction2D.jl
 # julia --project=../JustRelax.jl/miniapps/. ../JustRelax.jl/miniapps/DYREL3D/subduction/Subduction3D_DYREL.jl
