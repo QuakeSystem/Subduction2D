@@ -50,6 +50,7 @@ JustRelax = {url = "https://github.com/QuakeSystem/JustRelax.jl", rev = "cm_dev"
 # Alternatives:
 # JustRelax = {path = "../JustRelax.jl"}   # local dev checkout
 # JustRelax = {url = "https://github.com/QuakeSystem/JustRelax.jl", rev = "v0.8.1-QS"}   # exact tag
+# JustRelax = {path = "../../../../QuakeSystem/JustRelax.jl"}
 
 [extras]
 CUDA_Runtime_jll = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"

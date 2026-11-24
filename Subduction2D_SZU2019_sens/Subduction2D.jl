@@ -1,11 +1,10 @@
-const isCUDA = true
-
 remote = true
+const isCUDA = remote
+
 if remote
     working_dir = "/scratch/tectonics/cmarsman/Subduction2D"
 else
-    #Hardcoded for Bert now
-    working_dir = "/Users/5723272/SD/Subduction2D"
+    working_dir = dirname(@__DIR__)
 end
 
 @static if isCUDA
@@ -40,6 +39,7 @@ Base.copy(x::JustPIC.CellArrays.CellArray) = typeof(x)(copy(x.data), size(x))
 # Load script dependencies
 using GeoParams, CairoMakie, LinearAlgebra, HDF5, PoissonGrids
 include(joinpath(working_dir, "LocalModules/visualisation.jl"))
+include(joinpath(working_dir, "LocalModules/visualisation_adjoints.jl"))
 include(joinpath(working_dir, "LocalModules/VelocityBoxes.jl"))
 include(joinpath(working_dir, "LocalModules/HelperFunctions.jl"))
 include(joinpath(working_dir, "LocalModules/NonuniformGrid.jl"))
@@ -91,6 +91,16 @@ function main(
     ny = 16,
     ref_grid = 0,
     version = nothing,
+    adjoint = false,
+    adjoint_start = 5, 
+    adjoint_every = 50,
+    adjoint_field = :Vx,
+    observation_center = (700.0e3, -30.0e3), 
+    observation_half_width = (100.0e3, 10.0e3), 
+    adjoint_kwargs = (; inner_solver = :bicgstab, verbose_PH = true, ϵ = 5.0e-3,
+                      penalty_factor = 3200.0, total_iterMax = 150.0e3,
+                      deflation = 5, pressure_relaxation = 0.5),
+    max_steps = typemax(Int), 
 )
 
     # Physical domain ------------------------------------
@@ -110,7 +120,9 @@ function main(
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
     # visualisation subroutine
-    vis = prepare_visualisation(ni, version=version, data_folder = "Subduction2D_SZU2019_sens/data")
+    vis = prepare_visualisation(ni, version=version,
+    data_folder = remote ? "Subduction2D_SZU2019_sens/data" : joinpath(@__DIR__, "data.nosync"))
+
     let
         dx, dz = Array(grid.di.vertex[1]), Array(grid.di.vertex[2])
         ar = [dx[i] / dz[j] for i in eachindex(dx), j in eachindex(dz)]
@@ -173,6 +185,12 @@ function main(
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
+    # ----------------------------------------------------
+
+    # ADJOINTS -------------------------------------------
+    stokes_ad = AdjointStokesArrays(backend, ni)
+    observation = (; field = adjoint_field, center = observation_center, half_width = observation_half_width)
+    gradients = material_controls(backend, ni, (:ρ0, :ρ, :G, :n); nphases = length(rheology))
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -241,27 +259,36 @@ function main(
     # surface_io = open_surface_track(joinpath(vis.vtk_dir, "surface_track.txt"))
     # For asynchronous figure making
     fig_task = nothing
-    while t < 4.4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
+    while t < 4.4e6 * (3600 * 24 * 365.25) && it < max_steps # run only for 4 Myrs
         if it == 4
             rheology = init_rheologies()
         end
 
-
-        # Rebuild flow_bcs' internal velocity-box dirichlet region so it picks up any
-        # change to vel_boxes_2D (e.g. the ramped-up prescribed velocity at it==5,10,15);
-        # solve_DYREL! itself re-asserts the prescribed value every DR iteration.
-        flow_bcs = velocity_box_flow_bcs(
-            stokes, grid, vel_boxes_2D;
-            free_slip = (left = true, right = true, top = true, bot = true),
-            free_surface = false,
-        )
+        if it > 19
+            flow_bcs = VelocityBoundaryConditions(;
+                free_slip = (left = true, right = true, top = true, bot = true),
+                free_surface = false,
+            )
+        else 
+            # Rebuild flow_bcs' internal velocity-box dirichlet region so it picks up any
+            # change to vel_boxes_2D (e.g. the ramped-up prescribed velocity at it==5,10,15);
+            # solve_DYREL! itself re-asserts the prescribed value every DR iteration.
+            flow_bcs = velocity_box_flow_bcs(
+                stokes, grid, vel_boxes_2D;
+                free_slip = (left = true, right = true, top = true, bot = true),
+                free_surface = false,
+            )
+        end
         update_halo!(@velocity(stokes)...)
 
         # Stokes solver ----------------
         args = (; T = thermal.T, P = stokes.P, dt = Inf)
+        run_adjoint = adjoint && it >= adjoint_start &&
+            iszero(rem(it - adjoint_start, adjoint_every))
         t_stokes = @elapsed begin
             out = solve_DYREL!(
                 stokes,
+                stokes_ad,
                 ρg,
                 dyrel,
                 flow_bcs,
@@ -282,7 +309,11 @@ function main(
                     viscosity_relaxation = 1.0e-2,
                     viscosity_cutoff = viscosity_cutoff,
                     free_surface = true,
-                    debug=false
+                    debug=false,
+                    adjoint = run_adjoint,
+                    observation = observation,
+                    gradients = gradients,
+                    adjoint_kwargs = adjoint_kwargs,
                 )
             )
         end
@@ -290,6 +321,30 @@ function main(
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
+
+        if run_adjoint
+            tag = lpad(it, 6, "0")
+            xmin_full, xmax_full = extrema(Array(xvi[1])) .* 1.0e-3
+            ymin_full, ymax_full = extrema(Array(xvi[2])) .* 1.0e-3
+            for (name, lims) in (
+                    ("full", (xmin_full, xmax_full, ymin_full, ymax_full)),
+                    ("zoom", (300.0, 1100.0, -200.0, 0.0)),
+                )
+                make_adjoint_figure(
+                    it, t, xvi, xci, ρg, stokes, stokes_ad, observation, vel_boxes_2D, lims...,
+                    joinpath(vis.figdir, "adjoint", "adjoint_$(name)_$tag.png"); version = version,
+                )
+                make_adjoint_parameter_figure(
+                    it, t, xvi, xci, ρg, stokes, gradients, rheology, observation, vel_boxes_2D, lims...,
+                    joinpath(vis.figdir, "adjoint", "params_$(name)_$tag.png"); air_phase = air_phase, version = version,
+                )
+            end
+            save_adjoint_sensitivities(
+                joinpath(vis.figdir, "adjoint", "sensitivities_$tag.h5"),
+                it, t, xvi, xci, ρg, stokes, stokes_ad, observation, gradients;
+                rheology = rheology, air_phase = air_phase,
+            )
+        end
 
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, dt)
@@ -580,6 +635,10 @@ nx, ny = 1049, 305
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)
 ref_grid = 1 # 0: original uniform grid, 1: non-uniform logistic grid
 
+# ADJOINTS
+adjoint = true
+adjoint_start = 50
+
 # GENERATE GRID
 li, origin, phases_GMG, T_GMG, (xv, yv) = GMG_subduction_2D_with_coords(
     nx + 1,
@@ -605,5 +664,7 @@ main(
     ny = ny,
     version = version,
     ref_grid = ref_grid,
+    adjoint = adjoint,
+    adjoint_start = adjoint_start
 );
 
