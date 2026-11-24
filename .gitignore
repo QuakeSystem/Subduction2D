@@ -40,3 +40,7 @@ sandbox/
 # Slurm output files
 *.err
 *.out
+
+#Data types
+*.jld2
+*.png
