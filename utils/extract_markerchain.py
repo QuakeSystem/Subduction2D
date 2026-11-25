@@ -17,8 +17,10 @@ Usage:
     python3 extract_markerchain.py /path/to/run/vtk
     python3 extract_markerchain.py /path/to/run/vtk --outdir topo_csv
 
-Requires the `vtk` Python package (not `pyvista`, which may be broken in
-some environments on this system). No Julia dependencies touched.
+Uses the `vtk` Python package if it is installed (not `pyvista`, which may be
+broken in some environments on this system). Without it, the chain files are
+parsed directly (raw appended, zlib-compressed, UInt64 headers, as written by
+WriteVTK.jl), with the reader from extract_surface_from_vtk.py.
 """
 
 import argparse
@@ -27,8 +29,11 @@ import os
 import sys
 import xml.etree.ElementTree as ET
 
-import vtk
-from vtk.util.numpy_support import vtk_to_numpy
+try:
+    import vtk
+    from vtk.util.numpy_support import vtk_to_numpy
+except ImportError:
+    vtk = None
 
 SECONDS_PER_KYR = 3600 * 24 * 365.25 * 1000
 
@@ -50,11 +55,30 @@ def read_pvd(pvd_path):
 
 
 def read_chain_points(vtp_path):
-    """Return the (x, h) points of a chain_*.vtp file as an Nx2 array, in km."""
+    """Return the (x, h) points of a chain_*.vtp file, in km."""
+    if vtk is None:
+        return _read_chain_points_raw(vtp_path)
     reader = vtk.vtkXMLPolyDataReader()
     reader.SetFileName(vtp_path)
     reader.Update()
     pts = vtk_to_numpy(reader.GetOutput().GetPoints().GetData())
+    return pts[:, 0] / 1.0e3, pts[:, 1] / 1.0e3  # x_km, h_km
+
+
+def _read_chain_points_raw(vtp_path):
+    """read_chain_points without the vtk package: decode the appended <Points> array."""
+    import re
+    from extract_surface_from_vtk import _decode_block
+    with open(vtp_path, "rb") as f:
+        data = f.read()
+    start = data.find(b"<AppendedData")
+    raw = data[data.find(b"_", start) + 1:]
+    header = data[:start].decode("utf-8", "replace")
+    m = re.search(r"<Points>\s*<DataArray ([^>]*)/>", header)
+    attrs = dict(re.findall(r'(\w+)="([^"]*)"', m.group(1)))
+    if attrs.get("format") != "appended" or attrs.get("type") != "Float64":
+        raise ValueError(f"{vtp_path}: unsupported Points array {attrs}")
+    pts = _decode_block(raw, int(attrs["offset"]), "<f8").reshape(-1, 3)
     return pts[:, 0] / 1.0e3, pts[:, 1] / 1.0e3  # x_km, h_km
 
 

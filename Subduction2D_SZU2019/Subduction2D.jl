@@ -236,8 +236,8 @@ function main(
     # Time loop
     t, it = 0.0, 0
 
-    # # per-step surface output in the SZU2019 marker-track layout
-    # surface_io = open_surface_track(joinpath(vis.vtk_dir, "surface_track.txt"))
+    # per-step surface output in the SZU2019 marker-track layout
+    surface_io = open_surface_track(joinpath(vis.vtk_dir, "surface_track.txt"))
     # For asynchronous figure making
     fig_task = nothing
     while t < 4.4e6 * (3600 * 24 * 365.25)  # run only for 4 Myrs
@@ -298,8 +298,8 @@ function main(
         println("dt kyr= ", dt/365.25/24/3600/1000, "  finite = ", isfinite(dt), "  positive = ", dt > 0)
 
         # surface h(t) with the strain rate, velocity and dt that move it this step (chain is advected below)
-        # write_surface_track!(surface_io, t, dt, chain, stokes, phase_ratios, grid, air_phase)
-        # rem(it, 25) == 0 && flush(surface_io)
+        write_surface_track!(surface_io, t, dt, chain, stokes, phase_ratios, grid, air_phase)
+        rem(it, 25) == 0 && flush(surface_io)
 
         # compute strain rate 2nd invartian - for plotting
         tensor_invariant!(stokes.τ)
@@ -562,7 +562,7 @@ function main(
         end
     end
         # ------------------------------
-    # close(surface_io)
+    close(surface_io)
     fig_task === nothing || wait(fig_task)        # don't exit with a figure half-written
     return nothing
 end

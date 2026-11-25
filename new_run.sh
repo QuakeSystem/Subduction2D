@@ -96,6 +96,15 @@ if grep -q "__[A-Z_]*__" "$OUTDIR/run_eejit_sub2d.sbatch"; then
     grep -n "__[A-Z_]*__" "$OUTDIR/run_eejit_sub2d.sbatch"; exit 1
 fi
 
+# Julia only reads LocalPreferences.toml next to the active Project.toml, so without this copy
+# the run ignores the CUDA_Runtime_jll pin (12.9) and loads a different CUDA runtime.
+# Use the environment's own preferences if it has them, else the repo root's.
+if [ -f "$ENV_DIR/LocalPreferences.toml" ]; then
+    cp "$ENV_DIR/LocalPreferences.toml" "$OUTDIR/"
+elif [ -f LocalPreferences.toml ]; then
+    cp LocalPreferences.toml "$OUTDIR/"
+fi
+
 cp -r LocalModules "$OUTDIR/"
 {
   echo "date: $(date -Iseconds)"
