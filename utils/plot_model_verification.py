@@ -94,12 +94,17 @@ def load_jr(vtk_dir, step, xlim, ylim, res_km):
     # a vertex is air if all its neighbouring cells are
     pad = np.pad(air_c, 1, mode="edge")
     air_v = pad[:-1, :-1] & pad[1:, :-1] & pad[:-1, 1:] & pad[1:, 1:]
-    x, y, phase = read_vtu_points_phase(os.path.join(vtk_dir, f"particles_{step:06d}.vtu"))
-    xp, yp, img = rasterise(x, y, phase, xlim, ylim, res_km)
+    # lithology needs the particle output, which runs only write when save_particle_points = true
+    pfile = os.path.join(vtk_dir, f"particles_{step:06d}.vtu")
+    lith = None
+    if os.path.isfile(pfile):
+        x, y, phase = read_vtu_points_phase(pfile)
+        xp, yp, img = rasterise(x, y, phase, xlim, ylim, res_km)
+        lith = (xp, yp, to_category(fill_empty(img), JR_CATEGORY, 6))
     return dict(
         t_myr=vtk_time_myr(vtk_dir, fname),
         T=(xc, yc, a["thermal_T"] - 273.15),
-        lith=(xp, yp, to_category(fill_empty(img), JR_CATEGORY, 6)),
+        lith=lith,
         eta=(xc, yc, np.where(air_c, np.nan, np.log10(a["η_vep"]))),
         txx=(xc, yc, np.where(air_c, np.nan, a["τxx"] / 1e6)),
         vy=(xv, yv, np.where(air_v, np.nan, a["Vy"] * MS_TO_CMYR)),
@@ -199,18 +204,21 @@ def main():
         d = load_szu(args.szu, int(args.step), args.xlim, args.ylim, args.res_km)
     print(f"{args.label}: t = {d['t_myr']:.3f} Myr")
 
-    # lithology
-    ids = sorted(CATEGORIES)
-    cmap = ListedColormap([CATEGORIES[i][1] for i in ids])
-    norm = BoundaryNorm(np.append(np.array(ids) - 0.5, ids[-1] + 0.5), cmap.N)
-    fig, ax = figure(d, d["lith"], "Lithology", args, cmap=cmap, norm=norm)
-    lx, ly, lv = d["lith"]
-    inview = (lx[None, :] >= args.xlim[0]) & (lx[None, :] <= args.xlim[1]) & \
-             (ly[:, None] >= args.ylim[0]) & (ly[:, None] <= args.ylim[1])
-    present = [i for i in ids if np.any(lv[inview] == i)]
-    ax.legend(handles=[Patch(facecolor=CATEGORIES[i][1], edgecolor="0.5", label=CATEGORIES[i][0]) for i in present],
-              loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=0.85 * args.fontsize)
-    save(fig, args, "lithology")
+    # lithology (JR runs without particle output have none)
+    if d["lith"] is None:
+        print("no particle output: skipping the lithology figure")
+    else:
+        ids = sorted(CATEGORIES)
+        cmap = ListedColormap([CATEGORIES[i][1] for i in ids])
+        norm = BoundaryNorm(np.append(np.array(ids) - 0.5, ids[-1] + 0.5), cmap.N)
+        fig, ax = figure(d, d["lith"], "Lithology", args, cmap=cmap, norm=norm)
+        lx, ly, lv = d["lith"]
+        inview = (lx[None, :] >= args.xlim[0]) & (lx[None, :] <= args.xlim[1]) & \
+                 (ly[:, None] >= args.ylim[0]) & (ly[:, None] <= args.ylim[1])
+        present = [i for i in ids if np.any(lv[inview] == i)]
+        ax.legend(handles=[Patch(facecolor=CATEGORIES[i][1], edgecolor="0.5", label=CATEGORIES[i][0]) for i in present],
+                  loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=0.85 * args.fontsize)
+        save(fig, args, "lithology")
 
     fig, _ = figure(d, d["eta"], "Effective viscosity", args, "log$_{10}$ $\\eta_{eff}$ (Pa s)",
                     iso_colour="w", cmap=CMAP_ETA, vmin=args.clim_eta[0], vmax=args.clim_eta[1])

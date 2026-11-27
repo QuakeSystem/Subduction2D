@@ -38,6 +38,8 @@ def main():
     ap.add_argument("--res-km", type=float, default=0.2)
     ap.add_argument("--zticks", type=float, default=20, help="depth tick spacing [km] (default 20)")
     ap.add_argument("--fontsize", type=float, default=20)
+    ap.add_argument("--no-lith", action="store_true",
+                    help="leave out the lithology column (automatic if a JR run has no particle output)")
     ap.add_argument("-o", "--out", default="model_verification_grid.png")
     args = ap.parse_args()
     plt.rcParams.update({"font.size": args.fontsize})
@@ -63,6 +65,12 @@ def main():
         ("vy", "Vertical velocity $v_y$", dict(cmap=CMAP_DIV, vmin=-args.vlim_vy, vmax=args.vlim_vy),
          "$v_y$ (cm/yr)", "k"),
     ]
+    missing = [label for label, d in data if d["lith"] is None]
+    if missing and not args.no_lith:
+        print(f"No particle output for {missing}: leaving out the lithology column")
+    with_lith = not (args.no_lith or missing)
+    if not with_lith:
+        columns = columns[1:]
 
     nrow, ncol = len(data), len(columns)
     panel_w = 9.0
@@ -97,6 +105,8 @@ def main():
                     cb.ax.text(0.5, 0.5, f"Time: {data[0][1]['t_myr']:.3f} Myr",
                                ha="center", va="center", transform=cb.ax.transAxes,
                                fontsize=args.fontsize * 1.1, fontweight="bold")
+    if not with_lith:  # no lithology slot for the time: put it above the colour bars
+        fig.suptitle(f"Time: {data[0][1]['t_myr']:.3f} Myr", fontsize=args.fontsize * 1.1, fontweight="bold")
 
     for label, d in data:  # the figure shows the first run's time; the others go to the terminal
         print(f"  {label}: {d['t_myr']:.3f} Myr")
