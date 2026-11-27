@@ -37,7 +37,7 @@ floor, while `1e-5` and tighter intermittently throw `ConvergenceError` for
 some monitor/zone combinations even at `maxiter = 60_000`.
 
 Set `verbose = 1` to print the resulting min/max/average cell size as a sanity
-check.
+check, or `verbose = 2` to also show PoissonGrids' per-iteration convergence log.
 """
 function poisson_coords_1d(
         n_vertices::Int,
@@ -57,9 +57,11 @@ function poisson_coords_1d(
     end
 
     nc = n_vertices - 1
-    vertices = solve_grid(x0, x1, monitor, nc; verbose = verbose == 1, tol = tol, maxiter = maxiter)
+    # PoissonGrids logs every few iterations (thousands of @info lines in the .err file);
+    # only pass that through at verbose ≥ 2. verbose = 1 prints just the summary below.
+    vertices = solve_grid(x0, x1, monitor, nc; verbose = verbose ≥ 2, tol = tol, maxiter = maxiter)
 
-    if verbose == 1
+    if verbose ≥ 1
         widths = diff(vertices)
         println("[grid verbose] non-uniform grid ($label) from $(x0) to $(x1):")
         println("  n cells = $nc")

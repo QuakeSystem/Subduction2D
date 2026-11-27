@@ -1,6 +1,14 @@
-const isCUDA = true
+# On eejit (GPU) or locally (CPU, e.g. MacBook): detected from the eejit scratch path
+const remote = isdir("/scratch/tectonics/bert/Subduction2D")
+const isCUDA = remote
+const ASYNC_FIGURES = true # draw figures in a background thread while the next step runs
+# Velocity faces outside the rock (ϕ = 0) are held at V = 0 by the variational solver. When the
+# chain moves up, such a face becomes active and starts the next solve at V = 0, next to rock moving
+# at cm/yr: in η ≈ 1e24–1e25 surface cells that is ~1e12 Pa of stress. 85–100% of the start-of-step
+# residual sat on/next to these newly active faces (v0.406–v0.408 dumps). true: start them at the
+# velocity of the face below instead.
+const FILL_NEW_FACES = true
 
-remote = true
 if remote
     working_dir = "/scratch/tectonics/bert/Subduction2D"
 else
@@ -54,6 +62,21 @@ include(rheology_file)
 include(joinpath(working_dir,"LocalModules/VelocityBoxKernels.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+
+# Give velocity faces that just became active (ϕ was 0, now > 0) the velocity of the face below.
+# Index maps (2D staggered): Vy[i + 1, j] <-> ϕ.Vy[i, j]   and   Vx[i, j + 1] <-> ϕ.Vx[i, j].
+# Repeated `npass` times so a stack of new faces fills upward from the rock.
+function fill_new_faces!(V, ϕ, ϕVx_prev, ϕVy_prev; npass = 3)
+    FILL_NEW_FACES || return 0
+    Vx, Vy = V.Vx, V.Vy
+    newVy = @views (ϕVy_prev[:, 2:end] .== 0) .& (ϕ.Vy[:, 2:end] .> 0)
+    newVx = @views (ϕVx_prev[:, 2:end] .== 0) .& (ϕ.Vx[:, 2:end] .> 0)
+    for _ in 1:npass
+        @views Vy[2:(end - 1), 2:end] .= ifelse.(newVy, copy(Vy[2:(end - 1), 1:(end - 1)]), Vy[2:(end - 1), 2:end])
+        @views Vx[:, 3:(end - 1)] .= ifelse.(newVx, copy(Vx[:, 2:(end - 2)]), Vx[:, 3:(end - 1)])
+    end
+    return sum(newVy) + sum(newVx)
+end
 
 import ParallelStencil.INDICES
 const idx_k = INDICES[2]
@@ -109,7 +132,8 @@ function main(
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
     # visualisation subroutine
-    vis = prepare_visualisation(ni, version=version)
+    vis = prepare_visualisation(ni, do_vtk=true, pictures = true,  pvd_name = "Subduction2D", data_folder = "Subduction2D_SZU2019/data", JRversion = "Subduction2D_JRv0.8.1_QS", version=version, save_particle_points = false, vtk_every = 25,  particle_vtk_every = 25, picture_every = 25)
+
     let
         dx, dz = Array(grid.di.vertex[1]), Array(grid.di.vertex[2])
         ar = [dx[i] / dz[j] for i in eachindex(dx), j in eachindex(dz)]
@@ -172,6 +196,10 @@ function main(
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
+    # previous-step rock fractions on the velocity faces, for fill_new_faces!
+    ϕVx_prev, ϕVy_prev = similar(ϕ.Vx), similar(ϕ.Vy)
+    size(stokes.V.Vy) == size(ϕ.Vy) .+ (2, 0) && size(stokes.V.Vx) == size(ϕ.Vx) .+ (0, 2) ||
+        error("fill_new_faces!: unexpected sizes V $(size(stokes.V.Vx)), $(size(stokes.V.Vy)) vs ϕ $(size(ϕ.Vx)), $(size(ϕ.Vy))")
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -206,7 +234,7 @@ function main(
 
     # Rheology
     args0 = (T = thermal.T, P = stokes.P, dt = Inf)
-    viscosity_cutoff = (1.0e18, 1.0e25)
+    viscosity_cutoff = (1.0e18, 1.0e24)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
     center2vertex!(stokes.viscosity.ηv, stokes.viscosity.η)
     # ----------------------------------------------------
@@ -216,8 +244,7 @@ function main(
         backend, rheology, phase_ratios, args0, dt, ni, minimum.(grid.di.vertex), li; ϵ = 1.0e-12, CFL = 0.7 / √2
     )
 
-    # Boundary conditions (includes the internal velocity-box dirichlet region,
-    # rebuilt each timestep below as the boxes ramp up -- see VelocityBoxKernels.jl)
+    # Boundary conditions (includes the internal velocity-box dirichlet region -- see VelocityBoxKernels.jl)
     flow_bcs = velocity_box_flow_bcs(
         stokes, grid, vel_boxes_2D;
         free_slip = (left = true, right = true, top = true, bot = true),
@@ -229,7 +256,11 @@ function main(
     # visualization prep moved to LocalModules/visualisation.jl
     centroid2particle!(pT, thermal.T, particles)
 
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3)
+    # variational DYREL: ϕ (rock ratio from the marker chain) eliminates air rows
+    # ϵ = 1e-2: solve_VariationalDYREL! measures an ABSOLUTE scale-normalised residual
+    # (|R|/Pspan·lx), whereas solve_DYREL! measured the residual RELATIVE to the start of each
+    # step. 1e-2 is roughly where the old solve_DYREL! runs ended (≈100–170 Pa/m), not stricter.
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-2)
 
     dt₀ = similar(thermal.T)
 
@@ -247,8 +278,8 @@ function main(
 
 
         # Rebuild flow_bcs' internal velocity-box dirichlet region so it picks up any
-        # change to vel_boxes_2D (e.g. the ramped-up prescribed velocity at it==5,10,15);
-        # solve_DYREL! itself re-asserts the prescribed value every DR iteration.
+        # change to vel_boxes_2D; solve_VariationalDYREL! itself re-asserts the prescribed
+        # value every DR iteration.
         flow_bcs = velocity_box_flow_bcs(
             stokes, grid, vel_boxes_2D;
             free_slip = (left = true, right = true, top = true, bot = true),
@@ -258,37 +289,46 @@ function main(
 
         # Stokes solver ----------------
         args = (; T = thermal.T, P = stokes.P, dt = Inf)
+        # nout, rel_drop, viscosity_relaxation and the iteration limits from the v0.415 sweep:
+        # nout 5 was the only robust setting, and rel_drop 1e-1 halves the cost there.
+        solver_kwargs = (;
+            air_phase = air_phase,
+            verbose_PH = true,
+            verbose_DR = false,
+            iterMax = 1.0e4,               # inner (DR) iterations per outer pass
+            rel_drop = 1.0e-1,             # inner-solve residual drop per outer pass
+            nout = 5,                      # residual check / pseudo-time-step refresh interval
+            # anderson_PH = 3,  # off (v0.411): Anderson on P may push DP-plastic trench cells across yield; v0.400 ran without it
+            λ_relaxation_PH = 0.5,
+            λ_relaxation_DR = 0.5,
+            total_iterMax = 1.0e5,         # all iterations per time step
+            viscosity_relaxation = 1.0e-2,
+            viscosity_cutoff = viscosity_cutoff,
+            free_surface = true,
+        )
+
         t_stokes = @elapsed begin
-            out = solve_DYREL!(
+            out = solve_VariationalDYREL!(
                 stokes,
                 ρg,
                 dyrel,
                 flow_bcs,
                 phase_ratios,
+                ϕ,
                 rheology,
                 args,
                 grid,
                 dt,
                 igg;
-                kwargs = (;
-                    verbose_PH = true,
-                    verbose_DR = false,
-                    iterMax = 50.0e2,
-                    rel_drop = 1.0e-2,
-                    nout = 100,
-                    λ_relaxation_PH = 0.5,
-                    λ_relaxation_DR = 0.5,
-                    viscosity_relaxation = 1.0e-2,
-                    viscosity_cutoff = viscosity_cutoff,
-                    free_surface = true,
-                    debug=false
-                )
+                kwargs = solver_kwargs,
             )
         end
 
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
+        # show the solver log now, so a blown-up Stokes solve is visible before the thermal solve
+        flush(stdout); flush(stderr)
 
         # rotate stresses
         rotate_stress!(pτ, stokes, particles, dt)
@@ -296,6 +336,13 @@ function main(
         dt_plot = dt
         dt = compute_dt(stokes, di_min, dt_max)
         println("dt kyr= ", dt/365.25/24/3600/1000, "  finite = ", isfinite(dt), "  positive = ", dt > 0)
+        # A dt below 1 yr means the Stokes solve produced runaway velocities (blown-up solve);
+        # stop here instead of spending minutes in the thermal solver on garbage fields.
+        dt_min = 1.0 * 3600 * 24 * 365.25
+        if !(isfinite(dt) && dt ≥ dt_min)
+            flush(stdout)
+            error("Stokes solve blew up at step $(it + 1): dt = $(dt / (3600 * 24 * 365.25)) yr < 1 yr")
+        end
 
         # surface h(t) with the strain rate, velocity and dt that move it this step (chain is advected below)
         write_surface_track!(surface_io, t, dt, chain, stokes, phase_ratios, grid, air_phase)
@@ -320,7 +367,7 @@ function main(
                 igg = igg,
                 phase = phase_ratios,
                 # stokes = stokes, # enables adiabatic heating: α T (P - P0) / dt
-                iterMax = 50.0e5,
+                iterMax = 1.0e5,
                 nout = 1.0e2,
                 verbose = false,
             )
@@ -359,15 +406,20 @@ function main(
 
         # # advect marker chain
         # semi-Lagrangian update with slope limiter: stops the chain forming a near-vertical
-        # cliff at the plate boundary (x ≈ 854 km); mean height free to change
-        # semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, xvi, dt;
-        #     max_slope_angle = 30.0, conserve_mean = false)
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, dt)
+        # cliff at the plate boundary (x ≈ 854 km). JustPIC defaults: max_slope_angle = 45°, conserve_mean = true
+        semilagrangian_advection_markerchain!(
+            chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, xvi, dt
+        )
+        # advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid.xi_vel, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
         update_phase_ratios!(phase_ratios, particles, pPhases) # always needed after advection/injection
-        update_rock_ratio!(ϕ, phase_ratios, air_phase)
-
-        compute_rock_fraction!(ϕ, chain, xvi, grid.di.vertex)        # if it == 1
+        # ϕ must come from the marker chain (not phase ratios) for the variational solver
+        copyto!(ϕVx_prev, ϕ.Vx); copyto!(ϕVy_prev, ϕ.Vy)   # previous-step fractions: keep BEFORE compute_rock_fraction!
+        compute_rock_fraction!(ϕ, chain, xvi, grid.di.vertex)
+        n_new = fill_new_faces!(stokes.V, ϕ, ϕVx_prev, ϕVy_prev)
+        println("newly active velocity faces filled from below: ", n_new)
+        # normally tens to a few hundred per step; ~all active faces means ϕ*_prev was not updated
+        n_new > 0.05 * (length(ϕ.Vx) + length(ϕ.Vy)) && @warn "fill_new_faces!: $n_new faces flagged as new — is ϕVx_prev/ϕVy_prev being updated?"
         #     @show extrema(Array(chain.h_vertices))
         #     @show extrema(Array(xvi[1]))
         #     @show Array(chain.h_vertices)
@@ -396,6 +448,8 @@ function main(
 
         @show it += 1
         t += dt
+        # stdout is block-buffered when redirected to the Slurm log; flush so it updates every step
+        flush(stdout); flush(stderr)
         ### PARAVIEW PLOTTING
         if it == 1 || rem(it, 25) == 0
             checkpointing_hdf5(vis.checkpoint, stokes, thermal.T, t, dt)
@@ -547,8 +601,8 @@ function main(
             it_h, t_h, dt_h = it, t, dt_plot
 
             fig_task === nothing || wait(fig_task)        # at most one plot job in flight
-            
-            fig_task = errormonitor(Threads.@spawn begin
+
+            draw_figures = () -> begin
                 make_figure(it_h, t_h, dt_h, xvi_h, xci_h, T_h, ρg_h, stokes_h,
                     Vx_limited, Vy_limited, pxv, pyv, clr, idxv,
                     xmin_full, xmax_full, ymin_full, ymax_full,
@@ -557,7 +611,12 @@ function main(
                     Vx_limited, Vy_limited, pxv, pyv, clr, idxv,
                     xmin_zoom, xmax_zoom, ymin_zoom, ymax_zoom,
                     joinpath(vis.figdir, "zoom", "zoom_$(lpad(it_h, 2, "0")).png"), version = version)
-            end)
+            end
+            if ASYNC_FIGURES
+                fig_task = errormonitor(Threads.@spawn draw_figures())
+            else
+                draw_figures()
+            end
 
         end
     end
@@ -574,6 +633,9 @@ println("version is $version")
 
 # MODEL SETUP
 nx, ny = 1049, 305
+if !remote  # local CPU runs: half resolution (~2.9 x 2.6 km cells on the uniform grid), else too slow
+    nx, ny = 524, 152
+end
 # nx, ny = 1049, 356  # 600 km depth
 
 # Choose grid type: original uniform grid (ref_grid=0) or non-uniform logistic grid (ref_grid=1)

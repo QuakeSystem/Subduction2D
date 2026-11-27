@@ -46,3 +46,5 @@ sandbox/
 #Data types
 *.jld2
 *.png
+# Python bytecode
+__pycache__/
